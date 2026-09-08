@@ -437,8 +437,7 @@ small {
   line-height: 1.6;
 }
 .composer-box textarea:focus-visible {
-  outline-offset: 4px;
-  border-radius: 2px;
+  outline: none;
 }
 .composer-box textarea::placeholder {
   color: var(--muted);
