@@ -818,6 +818,9 @@ small {
   margin-bottom: var(--space-8);
   min-width: 0;
 }
+.message:has(+ .message.tool) {
+  margin-bottom: var(--space-2);
+}
 .message-author {
   display: flex;
   gap: var(--space-2);
@@ -962,7 +965,7 @@ small {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-3);
+  padding: var(--space-2);
   cursor: pointer;
 }
 .tool-output summary code {
@@ -974,8 +977,10 @@ small {
   color: var(--subtle);
 }
 .tool-output pre {
+  max-height: 322px;
   margin: 0;
   border-radius: 0;
+  overflow: auto;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
