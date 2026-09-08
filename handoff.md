@@ -17,6 +17,7 @@ Projects are optional existing readable folders on the machine. Standalone chats
 - Agent display name defaults to `Crab`.
 - Agent name can be overridden with `CRABASE_AGENT_NAME` or `server/config/crabase.php`.
 - Model and reasoning selectors load from `model/list` on the persistent Codex app-server connection. Selections are stored with each queued job.
+- Typography uses rem tokens (1rem = 16px at the default root): navigation 0.875rem, messages/composer 1rem.
 - DM Sans is bundled locally through `@fontsource-variable/dm-sans`; chat/composer text is intentionally readable.
 - Dummy users: open `/?user=user1` and `/?user=user2` in separate browser tabs. The selected identity is kept in each tab’s sessionStorage.
 

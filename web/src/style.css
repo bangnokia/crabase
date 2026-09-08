@@ -313,7 +313,7 @@ small {
   width: 20px;
   height: 20px;
   border: 1px solid var(--sidebar);
-  font-size: 9px;
+  font-size: var(--type-avatar);
 }
 .avatar-stack {
   display: inline-flex;
@@ -331,7 +331,7 @@ small {
   place-items: center;
   background: var(--paper);
   border: 1px solid var(--line);
-  font-size: 10px;
+  font-size: var(--type-avatar);
 }
 .main-panel {
   min-width: 0;
@@ -634,7 +634,7 @@ small {
   background: var(--code);
   padding: 2px var(--space-1);
   border-radius: 4px;
-  font-size: 0.9em;
+  font-size: var(--type-label);
 }
 .message-body blockquote {
   margin-left: 0;
@@ -978,7 +978,7 @@ legend {
     margin-top: var(--space-6);
   }
   .welcome h1 {
-    font-size: 28px;
+    font-size: var(--type-title-mobile);
   }
   .conversation {
     padding: var(--space-4);

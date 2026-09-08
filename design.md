@@ -40,13 +40,20 @@ Keep the existing warm neutral palette. Most hierarchy should come from position
 
 Use bundled DM Sans for application text. Use a system monospace stack for code, commands, and paths. Do not load a new font service.
 
-| Role                      | Target size | Weight  | Use                                  |
-| ------------------------- | ----------- | ------- | ------------------------------------ |
-| New-chat heading          | 28–30px     | 450–500 | One short heading                    |
-| Dialog heading            | 20px        | 500     | Dialog purpose                       |
-| Message and composer text | 15px        | 400     | Comfortable reading, 1.6 line height |
-| Controls and navigation   | 13–14px     | 400–550 | Consistent sizes across peers        |
-| Supporting metadata       | 12px        | 400     | Time, branch, secondary details      |
+All font sizes use semantic `rem` tokens. At the browser’s default root size, **1rem = 16px**. Keep the root at `100%` so browser text-size preferences remain effective. Do not add 13px/15px font sizes or per-component pixel overrides.
+
+| Role | Token | Size | Default equivalent |
+| --- | --- | --- | --- |
+| Avatar initials and overflow | `--type-avatar` | 0.625rem | 10px |
+| Supporting metadata | `--type-meta` | 0.75rem | 12px |
+| Navigation and compact labels | `--type-label` | 0.875rem | 14px |
+| Controls | `--type-control` | 0.875rem | 14px |
+| Messages and composer | `--type-body` | 1rem | 16px |
+| Dialog/section headings | `--type-section` | 1.25rem | 20px |
+| Mobile new-chat heading | `--type-title-mobile` | 1.75rem | 28px |
+| Desktop new-chat heading | `--type-title` | 2rem | 32px |
+
+Label and control roles intentionally share one size. Inline code uses the label token. Use regular weight for reading text and medium weight for headings and controls; preserve unitless line heights.
 
 Never shrink an individual label just because it is long. Allow reflow or truncate navigation text with its full value available through an accessible name or tooltip. Keep message text intact. Aim for roughly 60–80 characters per line in prose.
 
@@ -157,7 +164,7 @@ The design system lives in `web/src/styles/tokens.css`; `web/src/style.css` owns
 | Text           | Primary `#292a27`, secondary `#62645e`, muted `#686b63`; theme-aware equivalents in dark mode               |
 | Semantic color | Focus `#52754a`, error `#ae352e`; dedicated dark-mode values                                                |
 | Space          | `--space-1/2/3/4/5/6/8`: 4/8/12/16/20/24/32px                                                               |
-| Type           | `--type-meta/label/control/body/section/title`: 12/13/14/15/20/30px                                         |
+| Type           | `--type-meta/label/control/body/section/title`: 0.75/0.875/0.875/1/1.25/2rem                                         |
 | Shape          | `--radius-small/panel/composer`: 8/16/20px                                                                  |
 | Layout         | `--sidebar-width`: 232px; `--content-width`: 800px                                                          |
 
