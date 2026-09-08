@@ -1,4 +1,9 @@
-export type Project = { id: string; name: string; path: string };
+export type Project = {
+  id: string;
+  name: string;
+  path: string;
+  created_order: number;
+};
 export type Chat = {
   id: string;
   project_id: string | null;
@@ -31,7 +36,14 @@ export type CodexModel = {
   defaultReasoningEffort: string;
   supportedReasoningEfforts: { reasoningEffort: string; description: string }[];
 };
+export type User = {
+  id: string;
+  name: string;
+  avatar_url: string;
+  created_at: string;
+};
 export type Snapshot = {
+  users: User[];
   agentName: string;
   models: CodexModel[];
   projects: Project[];

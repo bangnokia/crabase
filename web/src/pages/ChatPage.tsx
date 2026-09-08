@@ -87,6 +87,7 @@ export function ChatPage({
   decide: (id: number, decision: "accept" | "decline") => void;
   children: ReactNode;
 }) {
+  const conversationMessages = messages.filter((message) => message.role !== "agent_activity");
   const scroll = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   useEffect(() => {
@@ -116,10 +117,10 @@ export function ChatPage({
               Loading chat…
             </p>
           )}
-          {loaded && !messages.length && (
+          {loaded && !conversationMessages.length && (
             <p className="muted">Start the conversation below.</p>
           )}
-          {messages.map((message) => (
+          {conversationMessages.map((message) => (
             <MessageItem
               key={message.id}
               {...{ message, agentName, avatars }}

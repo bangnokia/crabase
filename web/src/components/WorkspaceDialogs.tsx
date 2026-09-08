@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Check, Moon, Search, Sun } from "lucide-react";
-import type { Avatars, Chat, Request } from "../types";
+import type { Avatars, Chat } from "../types";
 import { Avatar, AvatarStack } from "./Avatar";
 import { avatarUrl, validAvatarUrl } from "../lib/identity";
 import { Dialog, ErrorNotice } from "./ui";
@@ -51,70 +51,8 @@ export function SearchDialog({
     </Dialog>
   );
 }
-export function ProjectDialog({
-  request,
-  added,
-  close,
-}: {
-  request: Request;
-  added: (id: string) => void;
-  close: () => void;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  return (
-    <Dialog title="Add a project" close={close}>
-      <p className="dialog-description">
-        Choose an existing folder inside your configured workspace.
-      </p>
-      <form
-        onSubmit={async (event) => {
-          event.preventDefault();
-          if (busy) return;
-          const form = new FormData(event.currentTarget);
-          setBusy(true);
-          setError("");
-          try {
-            const result = await request<{ id: string }>("project", {
-              name: form.get("name"),
-              path: form.get("path"),
-            });
-            added(result.id);
-          } catch (error) {
-            setError((error as Error).message);
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        <label>
-          Project name
-          <input
-            name="name"
-            required
-            maxLength={80}
-            autoFocus
-            placeholder="My project"
-          />
-        </label>
-        <label>
-          Folder path
-          <input name="path" required placeholder="/path/to/project" />
-        </label>
-        <ErrorNotice message={error} />
-        <div className="dialog-actions">
-          <button type="button" className="button secondary" onClick={close}>
-            Cancel
-          </button>
-          <button className="button primary" disabled={busy}>
-            {busy ? "Adding…" : "Add project"}
-          </button>
-        </div>
-      </form>
-    </Dialog>
-  );
-}
 export function SettingsDialog({
+  users,
   name,
   setName,
   theme,
@@ -123,12 +61,13 @@ export function SettingsDialog({
   changeAvatar,
   close,
 }: {
+  users: import("../types").User[];
   name: string;
   setName: (name: string) => void;
   theme: string;
   setTheme: (theme: string) => void;
   avatars: Avatars;
-  changeAvatar: (user: string, url: string) => void;
+  changeAvatar: (user: string, url: string) => Promise<void>;
   close: () => void;
 }) {
   const [url, setUrl] = useState(avatarUrl(name, avatars));
@@ -145,8 +84,11 @@ export function SettingsDialog({
             setError("");
           }}
         >
-          <option>user1</option>
-          <option>user2</option>
+          {users.map((user) => (
+            <option key={user.id} value={user.name}>
+              {user.name}
+            </option>
+          ))}
         </select>
       </label>
       <form
@@ -156,8 +98,9 @@ export function SettingsDialog({
             setError("Enter an HTTP or HTTPS image URL.");
             return;
           }
-          changeAvatar(name, url);
-          setError("");
+          void changeAvatar(name, url)
+            .then(() => setError(""))
+            .catch((error) => setError(error.message));
         }}
       >
         <label>

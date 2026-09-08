@@ -1,3 +1,4 @@
+import { ProjectDialog } from "./components/ProjectDialog";
 import { useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { useRoute } from "./hooks/useRoute";
@@ -9,11 +10,7 @@ import { Sidebar } from "./components/Sidebar";
 import { Header } from "./components/Header";
 import { DetailsPanel } from "./components/DetailsPanel";
 import { Composer, type SendOptions } from "./components/Composer";
-import {
-  SearchDialog,
-  ProjectDialog,
-  SettingsDialog,
-} from "./components/WorkspaceDialogs";
+import { SearchDialog, SettingsDialog } from "./components/WorkspaceDialogs";
 import { NewChatPage } from "./pages/NewChatPage";
 import { ChatPage } from "./pages/ChatPage";
 export function App() {
@@ -22,7 +19,7 @@ export function App() {
   const workspace = useWorkspace(selected);
   const { data, live, loaded, messages, approvals, error, setError, request } =
     workspace;
-  const preferences = usePreferences();
+  const preferences = usePreferences(data.users, request);
   const [projectId, setProjectId] = useState("");
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -115,7 +112,7 @@ export function App() {
         ...options,
         chat_id: id,
         body,
-        author: preferences.name,
+        user_id: data.users.find((user) => user.name === preferences.name)?.id,
       });
       if (draftRef.current.trim() === body) setDraft("");
     } catch (error) {
@@ -125,10 +122,10 @@ export function App() {
       setBusy(false);
     }
   }
-  async function archive() {
-    if (!chat) return;
-    if (await act("archive", { chat_id: chat.id, archived: !chat.archived }))
-      setToast(chat.archived ? "Chat restored" : "Chat archived");
+  async function archive(target = chat) {
+    if (!target) return;
+    if (await act("archive", { chat_id: target.id, archived: !target.archived }))
+      setToast(target.archived ? "Chat restored" : "Chat archived");
   }
   const composer = (
     <Composer
@@ -170,6 +167,7 @@ export function App() {
         open={open}
         newChat={newChat}
         showDialog={setDialog}
+        archive={(target) => void archive(target)}
       />
       <main className="main-panel" id="main-content" tabIndex={-1}>
         <Header
@@ -221,6 +219,7 @@ export function App() {
       {details && (
         <DetailsPanel
           artifacts={workspace.artifacts}
+          messages={messages}
           chatSelected={!!selected}
           loaded={loaded}
           close={() => setDetails(false)}
@@ -245,13 +244,17 @@ export function App() {
           request={request}
           added={(id) => {
             newChat(id);
-            setToast("Project added");
+            setToast("Project opened");
           }}
           close={() => setDialog("")}
         />
       )}
       {dialog === "settings" && (
-        <SettingsDialog {...preferences} close={() => setDialog("")} />
+        <SettingsDialog
+          users={data.users}
+          {...preferences}
+          close={() => setDialog("")}
+        />
       )}
     </div>
   );

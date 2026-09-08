@@ -1,11 +1,15 @@
 import {
+  createContext,
   useEffect,
   useId,
   useRef,
+  useState,
+  useContext,
   type ButtonHTMLAttributes,
   type ReactNode,
 } from "react";
-import { X } from "lucide-react";
+import { Check, X } from "lucide-react";
+const MenuClose = createContext(() => {});
 export function IconButton({
   label,
   className = "",
@@ -21,6 +25,80 @@ export function IconButton({
       {...props}
     >
       {children}
+    </button>
+  );
+}
+export function Menu({
+  label,
+  icon,
+  children,
+}: {
+  label: string;
+  icon: ReactNode;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const close = (event: PointerEvent) => {
+      if (!ref.current?.contains(event.target as Node))
+        setOpen(false);
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, []);
+  return (
+    <div
+      ref={ref}
+      className="menu"
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return;
+        setOpen(false);
+        ref.current?.querySelector<HTMLElement>(".icon-button")?.focus();
+      }}
+    >
+      <IconButton
+        label={label}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        {icon}
+      </IconButton>
+      {open && (
+        <MenuClose.Provider value={() => setOpen(false)}>
+          <div className="menu-content" role="menu" aria-label={label}>
+            {children}
+          </div>
+        </MenuClose.Provider>
+      )}
+    </div>
+  );
+}
+export function MenuLabel({ children }: { children: ReactNode }) {
+  return <span className="menu-label">{children}</span>;
+}
+export function MenuItem({
+  selected,
+  children,
+  onClick,
+}: {
+  selected?: boolean;
+  children: ReactNode;
+  onClick: () => void;
+}) {
+  const close = useContext(MenuClose);
+  return (
+    <button
+      role={selected === undefined ? "menuitem" : "menuitemradio"}
+      aria-checked={selected}
+      onClick={() => {
+        onClick();
+        close();
+      }}
+    >
+      <span>{children}</span>
+      {selected && <Check size={15} />}
     </button>
   );
 }

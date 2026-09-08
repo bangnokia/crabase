@@ -2,6 +2,7 @@ node_modules/
 server/vendor/
 server/runtime/*
 !server/runtime/.gitkeep
+server/database/*.sqlite
 server/public/assets/
 server/public/index.html
 .env

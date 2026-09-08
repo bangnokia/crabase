@@ -1,34 +1,20 @@
 import { useEffect, useState } from "react";
-import type { Avatars } from "../types";
-import { validAvatarUrl } from "../lib/identity";
-function readAvatars(): Avatars {
-  try {
-    const saved: unknown = JSON.parse(
-      localStorage.getItem("crabase.avatars") || "{}",
-    );
-    if (!saved || typeof saved !== "object" || Array.isArray(saved)) return {};
-    return Object.fromEntries(
-      Object.entries(saved).filter(
-        ([, url]) => typeof url === "string" && validAvatarUrl(url),
-      ),
-    );
-  } catch {
-    return {};
-  }
-}
-export function usePreferences() {
+import type { User, Request } from "../types";
+export function usePreferences(users: User[], request: Request) {
   const [name, setName] = useState<string>(() => {
     const query = new URLSearchParams(location.search).get("user");
     return (
       [query, sessionStorage.getItem("crabase.test-user")].find(
-        (v) => v === "user1" || v === "user2",
+        (v) => typeof v === "string" && v.length > 0,
       ) || "user1"
     );
   });
   const [theme, setTheme] = useState(() =>
     localStorage.getItem("crabase.theme") === "dark" ? "dark" : "light",
   );
-  const [avatars, setAvatars] = useState(readAvatars);
+  const avatars = Object.fromEntries(
+    users.map((user) => [user.name, user.avatar_url]),
+  );
   useEffect(() => {
     sessionStorage.setItem("crabase.test-user", name);
     const url = new URL(location.href);
@@ -41,17 +27,10 @@ export function usePreferences() {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("crabase.theme", theme);
   }, [theme]);
-  useEffect(() => {
-    const update = (event: StorageEvent) => {
-      if (event.key === "crabase.avatars") setAvatars(readAvatars());
-    };
-    window.addEventListener("storage", update);
-    return () => window.removeEventListener("storage", update);
-  }, []);
-  function changeAvatar(user: string, url: string) {
-    const next = { ...avatars, [user]: url };
-    setAvatars(next);
-    localStorage.setItem("crabase.avatars", JSON.stringify(next));
+  async function changeAvatar(userName: string, url: string) {
+    const user = users.find((user) => user.name === userName);
+    if (!user) throw new Error("User not found.");
+    await request("userAvatar", { user_id: user.id, avatar_url: url });
   }
   return { name, setName, theme, setTheme, avatars, changeAvatar };
 }

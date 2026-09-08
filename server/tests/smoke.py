@@ -56,7 +56,10 @@ if __name__=='__main__':
     finally:
         if 'rejected' in locals():rejected.close()
     first,second=Client(),Client()
-    state=first.call('sync')['state']; assert state['projects'] and state['chats']
+    state=first.call('sync')['state']; users={u['name']:u['id'] for u in state['users']}; assert state['projects'] and state['chats']
+    folders=first.call('projectFolders')
+    assert folders['parent'] is None and all(not f['name'].startswith('.') for f in folders['folders'])
+    first.call('projectFolders', {'path':'/does-not-exist-crabase'}, error=True)
     first.call('unknown',error=True)
     first.call('create',{'project_id':'missing'},error=True)
     first.call('create',{'title':' '},error=True)
@@ -68,7 +71,7 @@ if __name__=='__main__':
         first.call('message',{'chat_id':chat,'body':' ','mode':'note'},error=True)
         first.call('message',{'chat_id':chat,'body':'check','mode':'invalid'},error=True)
         body='Live note '+uuid.uuid4().hex
-        first.call('message',{'chat_id':chat,'body':body,'mode':'note','author':'user1'})
+        first.call('message',{'chat_id':chat,'body':body,'mode':'note','user_id':users['user1']})
         update=second.patch('messages');assert update['chat_id']==chat and update['messages'][0]['body']==body
         assert update['messages'][0]['author']=='user1'
         message_id=update['messages'][0]['id']
@@ -78,7 +81,7 @@ if __name__=='__main__':
         assert 'messages' not in delta and 'state' not in delta,'Delta resent history or workspace'
         second.close();second=Client();restored=second.call('sync',{'chat_id':chat})['thread']
         assert restored['messages'][0]['body']==body+' streamed' and restored['chat']['thread_id'] is None
-        second.call('message',{'chat_id':chat,'body':'Reply from second test user','mode':'note','author':'user2'})
+        second.call('message',{'chat_id':chat,'body':'Reply from second test user','mode':'note','user_id':users['user2']})
         both=first.call('sync',{'chat_id':chat})['thread']['messages']
         assert [m['author'] for m in both]==['user1','user2']
         # Publishing pushes the file list to subscribers and survives reconnect/sync.

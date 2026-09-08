@@ -42,7 +42,7 @@ export function Header({
             <Copy size={16} />
           </IconButton>
         )}
-        <IconButton label="Artifacts" onClick={toggleDetails}>
+        <IconButton label="Artifacts and agent activity" onClick={toggleDetails}>
           <PanelRight size={18} />
         </IconButton>
       </div>

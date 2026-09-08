@@ -22,6 +22,156 @@ For frontend development, keep PHP running and run `npm run dev` in another term
 
 If `codex` is not on PHP's PATH, set `CODEX_BIN` to its absolute executable path before starting PHP. Authentication and model defaults come from the local Codex CLI configuration. Run `codex login` separately if necessary. `CRABASE_DB` optionally overrides the SQLite path (mainly for isolated testing).
 
+## VPS setup
+
+Crabase currently has no real authentication or project authorization. Keep both listeners on loopback and connect through an SSH tunnel. Do not expose ports 8787 or 8788 through a public firewall, reverse proxy, or container port mapping.
+
+### 1. Install prerequisites
+
+The VPS needs Git, Composer, PHP 8.1+ with PDO SQLite, `pcntl`, and `posix`, Node 22.12+, npm, and the Codex CLI. On Ubuntu/Debian, install the system packages first:
+
+```sh
+sudo apt update
+sudo apt install -y git unzip php-cli php-sqlite3 php-mbstring composer
+php -m | grep -E 'pcntl|posix|pdo_sqlite'
+node --version
+npm --version
+composer --version
+codex --version
+```
+
+Install a current Node release and the Codex CLI using their official instructions if the distribution packages do not meet the versions above.
+
+### 2. Create a dedicated user and install Crabase
+
+Run the application and Codex under the same unprivileged account so the persistent worker can read that account's Codex authentication and only the intended workspace folders.
+
+```sh
+sudo adduser --disabled-password --gecos '' crabase
+sudo -iu crabase
+git clone https://github.com/bangnokia/crabase.git ~/crabase
+cd ~/crabase
+npm ci
+composer install --working-dir=server --no-dev --optimize-autoloader
+mkdir -p server/runtime ~/workspaces
+cp .env.example .env
+```
+
+Edit `.env` for the VPS:
+
+```dotenv
+CRABASE_WORKSPACE_ROOT=/home/crabase/workspaces
+CRABASE_AGENT_NAME=Crab
+CRABASE_PARALLEL_CHATS=12
+CRABASE_DB=/home/crabase/crabase/server/runtime/crabase.sqlite
+CODEX_BIN=/absolute/path/from-command-v-codex
+```
+
+`CRABASE_WORKSPACE_ROOT` is the highest directory users may browse and select as a project. Keep it narrow. Set `CODEX_BIN` to the output of `command -v codex`; omit it only when `codex` is already on the service PATH.
+
+Authenticate Codex as the service user, then build and initialize the database:
+
+```sh
+codex login
+npm run build
+cd server
+vendor/bin/phinx migrate
+# Optional: vendor/bin/phinx seed:run
+php start.php start
+```
+
+Confirm that http://127.0.0.1:8787 responds on the VPS, then stop the foreground process with Ctrl+C.
+
+### 3. Run with systemd
+
+Create `/etc/systemd/system/crabase.service` as root. Adjust the PHP path if `command -v php` is not `/usr/bin/php`.
+
+```ini
+[Unit]
+Description=Crabase workspace
+After=network.target
+
+[Service]
+Type=simple
+User=crabase
+Group=crabase
+WorkingDirectory=/home/crabase/crabase/server
+Environment=HOME=/home/crabase
+Environment=PATH=/home/crabase/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/php start.php start
+ExecStop=/usr/bin/php start.php stop
+Restart=on-failure
+RestartSec=3
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable it and inspect its logs:
+
+```sh
+sudo systemctl daemon-reload
+sudo systemctl enable --now crabase
+sudo systemctl status crabase
+sudo journalctl -u crabase -f
+```
+
+### 4. Connect privately
+
+From your computer, forward both the HTTP and WebSocket listeners:
+
+```sh
+ssh -N \
+  -L 8787:127.0.0.1:8787 \
+  -L 8788:127.0.0.1:8788 \
+  crabase@YOUR_VPS_HOST
+```
+
+Keep that terminal open and visit http://127.0.0.1:8787 locally. The browser loads the built frontend through port 8787 and connects to the WebSocket through the forwarded port 8788.
+
+If UFW is enabled, allow SSH but do not add rules for Crabase's ports:
+
+```sh
+sudo ufw allow OpenSSH
+sudo ufw enable
+sudo ufw status
+```
+
+### 5. Update, back up, and restore
+
+Before an update, make a consistent SQLite backup and preserve generated artifacts and Codex thread storage:
+
+```sh
+sudo -iu crabase
+cd ~/crabase
+mkdir -p ~/backups
+sqlite3 server/runtime/crabase.sqlite \
+  ".backup '/home/crabase/backups/crabase.sqlite'"
+cp -a ~/workspaces/.artifacts ~/backups/artifacts
+cp -a ~/.codex ~/backups/codex
+```
+
+An update should stop the persistent worker, install the checked-in dependency versions, rebuild, migrate, and restart:
+
+```sh
+sudo systemctl stop crabase
+sudo -iu crabase
+cd ~/crabase
+git pull --ff-only
+npm ci
+composer install --working-dir=server --no-dev --optimize-autoloader
+npm run build
+cd server && vendor/bin/phinx migrate
+exit
+sudo systemctl start crabase
+sudo systemctl status crabase
+```
+
+To restore, stop Crabase, replace `server/runtime/crabase.sqlite` with the backup, restore `.artifacts` and `~/.codex` to their original locations and ownership, then start the service. Never run migration rollback commands against the only copy of workspace data.
+
+For failures, check `journalctl -u crabase`, confirm the service user's `CODEX_BIN`, run `codex login` as that user, verify directory ownership, and run `vendor/bin/phinx status` from `server/`.
+
 ## Included
 
 - Responsive desktop-style interface, light/dark themes, project sidebar, search (⌘/Ctrl K), new-thread shortcut (⌘/Ctrl N), composer, and activity panel.
@@ -113,8 +263,18 @@ vendor/bin/phinx migrate   # Reapply after editing an unshipped migration
 
 Use explicit `up()` and `down()` methods for changes that cannot be automatically reversed by `change()`. Once deployed, leave migration files unchanged and add another migration. Phinx records applied versions in `phinxlog`. SQLite migrations run transactionally; irreversible data loss requires a backup, even when schema rollback is possible.
 
-For isolated development, prefix **every command** with `CRABASE_DB=/absolute/path/dev.sqlite`. Rolling back the initial migration drops all application tables and their data. Do not run it against the workspace database you want to keep. Artifact files are outside migration scope.
+For isolated development, prefix **every command** with `CRABASE_DB=/absolute/path/dev.sqlite`. Each initial table has its own migration. Rolling back drops the latest table/change; `rollback -t 0` drops all application tables and their data. Do not run it against the workspace database you want to keep. Artifact files are outside migration scope.
 
 Deployment: stop the server, create a consistent SQLite backup using SQLite's backup API (including WAL contents), run `vendor/bin/phinx migrate`, and start the server only after success. Workers no longer create, upgrade, or seed tables on connection. `vendor/bin/phinx seed:run` optionally registers the Crabase project; it does not insert dummy conversations.
 
-The initial migration can adopt the current pre-Phinx schema without rewriting application rows. It rejects older/incompatible columns; upgrade those databases using the previous application release first. Always back up before adoption.
+The initial table migrations can adopt the current pre-Phinx schema without rewriting application rows. It rejects older/incompatible columns; upgrade those databases using the previous application release first. Always back up before adoption.
+
+### Models and users
+
+`server/app/model/` contains Webman Eloquent models: User, Project, Chat, Message, Job, Approval, Event, and Setting. Relationships connect projects to chats and users to their messages. `Actions` validates input and coordinates model operations; Phinx owns migrations. `config/database.php` uses SQLite with foreign keys and Webman's connection pool. Low-level streaming/queue SQL uses the same context connection through Store, preserving transactions and revision notifications.
+
+Users persist in SQLite with stable IDs, names, avatar URLs, and creation timestamps. Existing human message authors are backfilled into `messages.user_id`; the author text remains a historical snapshot. The message action requires a valid `user_id`. Profiles/avatars are pushed through workspace sync; avatar updates use the `userAvatar` action. Settings still switches local profiles without authentication. OAuth login and permissions are not implemented yet; do not expose the loopback service publicly.
+
+### Parallel agent chats
+
+The backend runs one persistent `codex app-server` subprocess and communicates through JSON-RPC over stdin/stdout. Different chats can run concurrently; messages in the same chat remain sequential. The default is 12 active chats, configurable with `CRABASE_PARALLEL_CHATS=12` in `.env`. Restart the backend after changing it. Cancelling one chat does not cancel other chats. Chats in the same project still share its files; Git worktree isolation is not implemented.

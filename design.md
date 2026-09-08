@@ -38,7 +38,7 @@ Keep the existing warm neutral palette. Most hierarchy should come from position
 
 ### Typography
 
-Use bundled DM Sans for application text. Use a system monospace stack for code, commands, and paths. Do not load a new font service.
+Use bundled DM Sans for application text. Use bundled DM Mono for terminal/tool output, code, commands, and paths, with system monospace fallbacks. Do not load a new font service.
 
 All font sizes use semantic `rem` tokens. At the browser’s default root size, **1rem = 16px**. Keep the root at `100%` so browser text-size preferences remain effective. Do not add 13px/15px font sizes or per-component pixel overrides.
 
@@ -93,7 +93,9 @@ Use 6–8px radii for rows and controls, 16–20px for the composer and dialogs,
 - Desktop sidebar width is draggable from its right edge, from 200px to a maximum of 500px (default 232px). The separator supports Left/Right arrows and Home/End. Mobile keeps the fixed-width drawer.
 
 - Keep “New chat”, search, standalone chats, projects, and the user profile easy to scan.
+- Place chat search as an icon beside Settings in the bottom profile row; keep the ⌘K shortcut.
 - Clicking “Projects” expands or collapses the project groups. Use a keyboard-operable button with `aria-expanded`.
+- Persist the Projects section and individual project expansion states in browser localStorage.
 - Clicking a project label toggles that project’s chats. Use closed/open folder icons to communicate state; no additional right-side chevron.
 - The adjacent plus button starts a new chat for that project.
 - Chat rows use the full available width. Selected rows get one quiet background treatment.
@@ -124,7 +126,7 @@ Use 6–8px radii for rows and controls, 16–20px for the composer and dialogs,
 ### Conversation
 
 - Agent messages align left; human messages and notes align right, with readable text and clear authorship.
-- Keep avatar and author as one compact group. Place the timestamp below the message body, aligned right for human messages. Mark notes with a quiet “Note” label.
+- Keep avatar and author as one compact group. Place the timestamp below the message body, aligned right for human messages. Reveal it on message hover or focus within; retain its layout space to prevent jumping. Mark notes with a quiet “Note” label.
 - Do not restore the removed chat heading, “Chat · time” row, or bottom status bar.
 - Keep terminal output and file details in disclosures. Make approvals visible and specific enough to support a decision.
 - Streaming must not steal the reader’s scroll position when they scroll upward. Resume following only when they return to the bottom or explicitly request it.
@@ -174,7 +176,7 @@ The design system lives in `web/src/styles/tokens.css`; `web/src/style.css` owns
 
 `App.tsx` composes the screen and coordinates mutations. `pages/` owns page structure; `components/` owns reusable visual and interaction units. `hooks/` owns WebSocket, route, and preference lifecycles. `lib/` holds small pure helpers with native Node checks. Use explicit typed props; do not introduce a global state layer simply to shorten prop lists.
 
-The implemented pass removes discarded home-screen content, consolidates both avatar surfaces, adds accessible project toggles, keeps archive recovery available, and establishes the tokens above. Avatar preferences remain browser-local. Project selection still uses the existing folder-path form; a browsable folder picker is separate feature work.
+The implemented pass removes discarded home-screen content, consolidates both avatar surfaces, adds accessible project toggles, keeps archive recovery available, and establishes the tokens above. Avatar URLs are stored in user profiles and synchronized through WebSocket. Project selection uses an Open folder dialog rooted at the configured workspace, with search within the current directory and navigation into child folders. Folder names supply project names; no custom-name input.
 
 A change is successful when the app becomes easier to use and more consistent, not merely more decorated.
 
@@ -182,10 +184,14 @@ A change is successful when the app becomes easier to use and more consistent, n
 
 Published raster image links show an inline preview and a download action. Other deliverables show their linked label with a download icon. Use `/files/<chat-id>/<filename>` URLs returned by the publisher; never present absolute filesystem paths as working browser links. HTML and SVG download rather than execute within the application.
 
-The right sidebar exposes a collapsible Files section for the selected chat, with compact filename/type/size rows, raster thumbnails, and download links. Distinguish loading from an empty list and clear the list when switching chats.
+The right sidebar exposes an Artifacts section for the selected chat, with compact filename/type/size rows, raster thumbnails, and download links. Distinguish loading from an empty list and clear the list when switching chats.
 
 The top bar is 48px tall and has no archive action. Omit the composer keyboard-hint footer; Enter/Shift+Enter behavior remains unchanged.
 
 The right sidebar stays in the shell flex layout at every viewport size, taking up to 280px (40vw on narrow screens). Opening it reduces the chat width; it never overlays the conversation.
 
-The right sidebar has a single “Artifacts” heading and the current chat’s file list. Omit workspace/project paths, agent runtime, activity, and duplicate section headings.
+The right sidebar shows “Artifacts” and the current chat’s file list, followed by subagent activity when available. Omit workspace/project paths, agent runtime, recent activity, and duplicate section headings.
+
+### Subagent activity
+
+Show one compact Agent activity block per main turn in the right sidebar, below Artifacts. Never render these blocks inline in the conversation. Use task names, small status icons, counts, expandable assignments/results, and collapsed tool output when supplied. Default open during work and on errors; collapse successful completed turns while respecting the reader's manual choice. Missing completion information must say so. Activity uses the existing message updates and the sidebar scroll area.

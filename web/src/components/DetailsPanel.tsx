@@ -1,22 +1,25 @@
 import { Download, File, X } from "lucide-react";
-import type { Artifact } from "../types";
+import { AgentActivity } from "./AgentActivity";
+import type { Artifact, Message } from "../types";
 import { IconButton } from "./ui";
 export function DetailsPanel({
   artifacts,
+  messages,
   chatSelected,
   loaded,
   close,
 }: {
   artifacts: Artifact[];
+  messages: Message[];
   chatSelected: boolean;
   loaded: boolean;
   close: () => void;
 }) {
   return (
-    <aside className="details-panel" aria-label="Artifacts">
+    <aside className="details-panel" aria-label="Artifacts and agent activity">
       <div className="details-heading">
         <h2>Artifacts</h2>
-        <IconButton label="Close artifacts" onClick={close}>
+        <IconButton label="Close right sidebar" onClick={close}>
           <X size={17} />
         </IconButton>
       </div>
@@ -66,6 +69,9 @@ export function DetailsPanel({
           )}
         </div>
       )}
+      {chatSelected && loaded && messages
+        .filter((message) => message.role === "agent_activity")
+        .map((message) => <AgentActivity key={message.id} body={message.body} />)}
     </aside>
   );
 }

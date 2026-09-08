@@ -13,22 +13,47 @@ def phinx(path, *args, success=True):
 
 with tempfile.TemporaryDirectory(prefix='crabase-migrations-') as temp:
     path = Path(temp)/'test.sqlite'
-    phinx(path, 'migrate')
+    phinx(path, 'migrate', '-t', '20260909000006')
     with sqlite3.connect(path) as db:
         db.execute("INSERT INTO projects VALUES ('test','Test','/test')")
         db.execute("INSERT INTO chats (id,title,created_at,updated_at) VALUES ('1234567890abcdef','Preserve me','2026-09-09','2026-09-09')")
         # Simulate the pre-Phinx database: current schema and data, no migration log.
         db.execute('DROP TABLE phinxlog')
-    phinx(path, 'migrate')
-    phinx(path, 'migrate')
+    phinx(path, 'migrate', '-t', '20260909000006')
+    phinx(path, 'migrate', '-t', '20260909000006')
     with sqlite3.connect(path) as db:
         assert db.execute('SELECT title FROM chats').fetchall() == [('Preserve me',)]
-        assert db.execute('SELECT count(*) FROM phinxlog').fetchone() == (1,)
+        assert db.execute('SELECT count(*) FROM phinxlog').fetchone() == (7,)
     phinx(path, 'rollback')
+    with sqlite3.connect(path) as db:
+        assert db.execute("SELECT name FROM sqlite_master WHERE name='chats'").fetchall()
+        assert not db.execute("SELECT name FROM sqlite_master WHERE name='settings'").fetchall()
+        assert db.execute('SELECT count(*) FROM phinxlog').fetchone() == (6,)
+    phinx(path, 'migrate', '-t', '20260909000006')
+    # The previous combined baseline used the first version. Keep its log row.
+    with sqlite3.connect(path) as db:
+        db.execute('DELETE FROM phinxlog WHERE version != 20260909000000')
+        db.execute("UPDATE phinxlog SET migration_name='InitialSchema'")
+    phinx(path, 'migrate', '-t', '20260909000006')
+    with sqlite3.connect(path) as db:
+        assert db.execute('SELECT title FROM chats').fetchall() == [('Preserve me',)]
+        assert db.execute('SELECT count(*) FROM phinxlog').fetchone() == (7,)
+    with sqlite3.connect(path) as db:
+        db.execute("INSERT INTO messages (chat_id,role,author,body,created_at) VALUES ('1234567890abcdef','user','Historical person','Keep this','2026-09-09')")
+    phinx(path, 'migrate')
+    with sqlite3.connect(path) as db:
+        assert db.execute("SELECT users.name FROM messages JOIN users ON users.id=messages.user_id").fetchall() == [('Historical person',)]
+        assert db.execute('SELECT count(*) FROM users').fetchone() == (3,)
+        assert 'user_id' in [c[1] for c in db.execute('PRAGMA table_info(messages)')]
+    phinx(path, 'rollback')
+    with sqlite3.connect(path) as db:
+        assert 'user_id' not in [c[1] for c in db.execute('PRAGMA table_info(messages)')]
+    phinx(path, 'migrate')
+    phinx(path, 'rollback', '-t', '0')
     with sqlite3.connect(path) as db:
         assert not db.execute("SELECT name FROM sqlite_master WHERE name='chats'").fetchall()
         assert db.execute('SELECT count(*) FROM phinxlog').fetchone() == (0,)
-    phinx(path, 'migrate')
+    phinx(path, 'migrate', '-t', '20260909000006')
     phinx(path, 'seed:run')
     phinx(path, 'seed:run')
     with sqlite3.connect(path) as db:

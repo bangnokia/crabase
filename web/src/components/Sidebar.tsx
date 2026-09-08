@@ -1,8 +1,10 @@
 import { useRef, useState, type CSSProperties } from "react";
 import {
+  Archive,
   Folder,
   FolderOpen,
   Loader2,
+  MoreHorizontal,
   PanelLeft,
   Plus,
   Search,
@@ -12,8 +14,10 @@ import {
 import type { Avatars, Chat, Project } from "../types";
 import { Avatar, AvatarStack } from "./Avatar";
 import { Crab } from "./Crab";
-import { IconButton } from "./ui";
+import { IconButton, Menu, MenuItem, MenuLabel } from "./ui";
+import { useProjectExpansion } from "../hooks/useProjectExpansion";
 import { clampSidebarWidth } from "../lib/layout";
+import { sortProjects, type ProjectSort } from "../lib/projects";
 type Props = {
   projects: Project[];
   chats: Chat[];
@@ -26,35 +30,64 @@ type Props = {
   open: (id: string) => void;
   newChat: (project?: string) => void;
   showDialog: (dialog: "search" | "project" | "settings") => void;
+  archive: (chat: Chat) => void;
 };
 function ChatLink({
   chat,
   selected,
   avatars,
   open,
+  archive,
 }: {
   chat: Chat;
   selected: string;
   avatars: Avatars;
   open: (id: string) => void;
+  archive: (chat: Chat) => void;
 }) {
   return (
-    <button
-      className={`chat-link ${selected === chat.id ? "selected" : ""}`}
-      aria-current={selected === chat.id ? "page" : undefined}
-      onClick={() => open(chat.id)}
-      title={chat.title}
+    <div
+      className={`chat-row ${chat.status !== "idle" ? "has-progress" : ""}`}
     >
-      <AvatarStack users={chat.participants} avatars={avatars} />
-      <span className="truncate">{chat.title}</span>
-      {chat.status !== "idle" && (
-        <Loader2
-          size={13}
-          className="spin chat-progress"
-          aria-label={chat.status}
-        />
-      )}
-    </button>
+      <button
+        className={`chat-link ${selected === chat.id ? "selected" : ""}`}
+        aria-current={selected === chat.id ? "page" : undefined}
+        onClick={() => open(chat.id)}
+        onMouseEnter={(event) => {
+          const title = event.currentTarget.querySelector<HTMLElement>(
+            ".chat-title-text",
+          )!;
+          const distance = title.parentElement!.clientWidth - title.scrollWidth;
+          title.style.setProperty(
+            "--marquee-distance",
+            `${Math.min(0, distance)}px`,
+          );
+          title.toggleAttribute("data-overflow", distance < 0);
+        }}
+        title={chat.title}
+      >
+        <AvatarStack users={chat.participants} avatars={avatars} />
+        <span className="chat-title">
+          <span className="chat-title-text">{chat.title}</span>
+        </span>
+      </button>
+      <div className="chat-trailing">
+        {chat.status !== "idle" && (
+          <Loader2
+            size={13}
+            className="spin chat-progress"
+            aria-label={chat.status}
+          />
+        )}
+        <IconButton
+          className="chat-archive"
+          label={`Archive ${chat.title}`}
+          onClick={() => archive(chat)}
+        >
+          <Archive size={15} />
+        </IconButton>
+      </div>
+    </div>
   );
 }
 export function Sidebar({
@@ -69,11 +102,13 @@ export function Sidebar({
   open,
   newChat,
   showDialog,
+  archive,
 }: Props) {
   const [width, setWidth] = useState(232);
+  const [showAll, setShowAll] = useState<string[]>([]);
+  const [projectSort, setProjectSort] = useState<ProjectSort>("created");
   const dragOffset = useRef(0);
-  const [collapsed, setCollapsed] = useState<string[]>([]);
-  const [projectsOpen, setProjectsOpen] = useState(true);
+  const { collapsed, projectsOpen, toggleProjects, toggleProject } = useProjectExpansion();
   return (
     <>
       {visible && (
@@ -107,38 +142,50 @@ export function Sidebar({
             <span>New chat</span>
             <kbd>⌘ N</kbd>
           </button>
-          <button className="nav-item" onClick={() => showDialog("search")}>
-            <Search size={17} />
-            <span>Search chats</span>
-            <kbd>⌘ K</kbd>
-          </button>
         </nav>
         <div className="sidebar-scroll">
-          <div className="section-label">Chats</div>
-          {chats
-            .filter((chat) => !chat.project_id && !chat.archived)
-            .map((chat) => (
-              <ChatLink key={chat.id} {...{ chat, selected, avatars, open }} />
-            ))}
           <div className="section-label">
             <button
               aria-expanded={projectsOpen}
               aria-controls="project-list"
-              onClick={() => setProjectsOpen(!projectsOpen)}
+              onClick={toggleProjects}
             >
               Projects
             </button>
-            <IconButton
-              label="Add project"
-              onClick={() => showDialog("project")}
-            >
-              <Plus size={15} />
-            </IconButton>
+            <div className="section-actions">
+              <Menu label="Sort projects" icon={<MoreHorizontal size={16} />}>
+                <MenuLabel>Sort by</MenuLabel>
+                {(
+                  [
+                    ["updated", "Latest update"],
+                    ["name", "Name"],
+                    ["created", "Default (created)"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <MenuItem
+                    key={value}
+                    selected={projectSort === value}
+                    onClick={() => setProjectSort(value)}
+                  >
+                    {label}
+                  </MenuItem>
+                ))}
+              </Menu>
+              <IconButton
+                label="Add project"
+                onClick={() => showDialog("project")}
+              >
+                <Plus size={15} />
+              </IconButton>
+            </div>
           </div>
           {projectsOpen && (
             <div id="project-list">
-              {projects.map((project) => {
+              {sortProjects(projects, chats, projectSort).map((project) => {
                 const expanded = !collapsed.includes(project.id);
+                const projectChats = chats.filter(
+                  (chat) => chat.project_id === project.id && !chat.archived,
+                );
                 return (
                   <section
                     className="project-group"
@@ -150,13 +197,7 @@ export function Sidebar({
                         className="project-label"
                         aria-expanded={expanded}
                         aria-controls={`project-${project.id}`}
-                        onClick={() =>
-                          setCollapsed(
-                            expanded
-                              ? [...collapsed, project.id]
-                              : collapsed.filter((id) => id !== project.id),
-                          )
-                        }
+                        onClick={() => toggleProject(project.id)}
                       >
                         {expanded ? (
                           <FolderOpen size={16} />
@@ -177,17 +218,25 @@ export function Sidebar({
                         id={`project-${project.id}`}
                         className="project-chats"
                       >
-                        {chats
-                          .filter(
-                            (chat) =>
-                              chat.project_id === project.id && !chat.archived,
-                          )
+                        {projectChats
+                          .slice(0, showAll.includes(project.id) ? undefined : 5)
                           .map((chat) => (
                             <ChatLink
                               key={chat.id}
-                              {...{ chat, selected, avatars, open }}
+                              {...{ chat, selected, avatars, open, archive }}
                             />
                           ))}
+                        {projectChats.length > 5 &&
+                          !showAll.includes(project.id) && (
+                            <button
+                              className="load-more"
+                              onClick={() =>
+                                setShowAll((ids) => [...ids, project.id])
+                              }
+                            >
+                              Load more ({projectChats.length - 5})
+                            </button>
+                          )}
                       </div>
                     )}
                   </section>
@@ -195,6 +244,15 @@ export function Sidebar({
               })}
             </div>
           )}
+          <div className="section-label">Chats</div>
+          {chats
+            .filter((chat) => !chat.project_id && !chat.archived)
+            .map((chat) => (
+              <ChatLink
+                key={chat.id}
+                {...{ chat, selected, avatars, open, archive }}
+              />
+            ))}
         </div>
         <div className="profile-row">
           <button
@@ -204,6 +262,9 @@ export function Sidebar({
             <Avatar user={name} avatars={avatars} />
             <span>{name}</span>
           </button>
+          <IconButton label="Search chats" onClick={() => showDialog("search")}>
+            <Search size={17} />
+          </IconButton>
           <IconButton label="Settings" onClick={() => showDialog("settings")}>
             <Settings size={17} />
           </IconButton>

@@ -1,7 +1,8 @@
 <?php
+
 namespace app\process;
 
-use app\service\Store as S;
+use app\service\Store;
 use Workerman\Timer;
 use Workerman\Worker;
 use Workerman\Connection\TcpConnection;
@@ -10,11 +11,15 @@ use Workerman\Protocols\Http\Request;
 final class Codex
 {
     private mixed $process = null;
-    private array $pipes = [], $pending = [], $items = [], $approvals = [];
-    private string $input = '', $output = '', $revision = '';
+    private array $pipes = [];
+    private array $pending = [];
+    private array $jobs = [];
+    private string $input = '';
+    private string $output = '';
+    private string $revision = '';
     private int $sequence = 0;
     private bool $ready = false;
-    private ?array $job = null;
+    private float $retryAt = 0;
     private float $started = 0;
     private array $clients = [];
     private ?Worker $worker = null;
@@ -23,272 +28,518 @@ final class Codex
     public function onWorkerStart(Worker $worker): void
     {
         $this->worker = $worker;
-        S::db();
-        S::run("UPDATE jobs SET status='failed' WHERE status='running'");
-        S::run("UPDATE chats SET status='idle' WHERE status IN ('running','approval')");
-        S::run("UPDATE approvals SET decision='decline' WHERE decision IS NULL");
+        Store::db();
+        Store::run("UPDATE jobs SET status='failed' WHERE status='running'");
+        Store::run("UPDATE chats SET status='idle' WHERE status IN ('running','approval')");
+        Store::run("UPDATE approvals SET decision='decline' WHERE decision IS NULL");
+        foreach (Store::all("SELECT id,body FROM messages WHERE role='agent_activity'") as $row) {
+            $activity = json_decode($row['body'], true);
+            if (!empty($activity['active'])) {
+                Store::run('UPDATE messages SET body=? WHERE id=?', [json_encode(\app\service\AgentActivity::finish($activity), JSON_INVALID_UTF8_SUBSTITUTE), $row['id']]);
+            }
+        }
         $this->status('ready');
-        S::run("INSERT INTO settings VALUES ('models','[]') ON CONFLICT(key) DO UPDATE SET value='[]'");
-        // ponytail: one agent turn at a time; add per-worktree workers for parallel coding.
-        Timer::add(0.05, function () { $this->tick(); $this->publish(); });
+        Store::run("INSERT INTO settings VALUES ('models','[]') ON CONFLICT(key) DO UPDATE SET value='[]'");
+        // One persistent app-server, with independent turns for different chats.
+        Timer::add(0.05, function () {
+            $this->tick();
+            $this->publish();
+        });
     }
 
     public function onWebSocketConnect(TcpConnection $connection, Request $request): void
     {
         $host = explode(':', $request->host())[0];
         if (!in_array($host, ['localhost','127.0.0.1']) || !in_array($request->header('origin'), ['http://localhost:5173','http://127.0.0.1:5173','http://localhost:8787','http://127.0.0.1:8787'])) {
-            $connection->close(); return;
+            $connection->close();
+            return;
         }
-        $connection->onBufferFull = fn() => $connection->close();
-        $this->clients[$connection->id] = ['chat_id'=>null,'state'=>null,'thread'=>null];
+        $connection->onBufferFull = fn () => $connection->close();
+        $this->clients[$connection->id] = ['chat_id' => null,'state' => null,'thread' => null];
     }
 
-    private function reply(TcpConnection $connection, array $message): void {
+    private function reply(TcpConnection $connection, array $message): void
+    {
         $connection->send(json_encode($message, JSON_INVALID_UTF8_SUBSTITUTE));
     }
-    public function onClose(TcpConnection $connection): void { unset($this->clients[$connection->id]); }
+    public function onClose(TcpConnection $connection): void
+    {
+        unset($this->clients[$connection->id]);
+    }
     public function onMessage(TcpConnection $connection, string $data): void
     {
-        if (!isset($this->clients[$connection->id])) { $connection->close(); return; }
+        if (!isset($this->clients[$connection->id])) {
+            $connection->close();
+            return;
+        }
         $id = null;
         try {
-            if (strlen($data) > 100000) throw new \InvalidArgumentException('Request too large.');
+            if (strlen($data) > 100000) {
+                throw new \InvalidArgumentException('Request too large.');
+            }
             $m = json_decode($data, true, 32, JSON_THROW_ON_ERROR);
-            if (!is_array($m) || !is_int($m['id'] ?? null) || !is_string($m['action'] ?? null) || !is_array($m['data'] ?? null)) throw new \InvalidArgumentException('Expected id, action, and data.');
+            if (!is_array($m) || !is_int($m['id'] ?? null) || !is_string($m['action'] ?? null) || !is_array($m['data'] ?? null)) {
+                throw new \InvalidArgumentException('Expected id, action, and data.');
+            }
             $id = $m['id'];
             if ($m['action'] === 'models') {
-                if (!$this->process) $this->boot();
-                elseif ($this->ready) $this->loadModels();
-                $result = ['ok'=>true];
+                if (!$this->process) {
+                    $this->boot();
+                } elseif ($this->ready) {
+                    $this->loadModels();
+                }
+                $result = ['ok' => true];
             } elseif ($m['action'] === 'sync') {
-                $chatId = empty($m['data']['chat_id']) ? null : S::text($m['data']['chat_id'],64);
-                $thread = $chatId ? S::thread($chatId) : null;
-                $state = S::snapshot();
-                $this->clients[$connection->id] = ['chat_id'=>$chatId,'state'=>$state,'thread'=>$thread];
-                $result = ['state'=>$state,'thread'=>$thread];
+                $chatId = empty($m['data']['chat_id']) ? null : Store::text($m['data']['chat_id'], 64);
+                $thread = $chatId ? Store::thread($chatId) : null;
+                $state = Store::snapshot();
+                $this->clients[$connection->id] = ['chat_id' => $chatId,'state' => $state,'thread' => $thread];
+                $result = ['state' => $state,'thread' => $thread];
             } else {
-                if (!in_array($m['action'], ['projectContext','project','create','message','archive','cancel','approval'])) throw new \InvalidArgumentException('Unknown action.');
-                $result = \app\service\Actions::handle($m['action'],$m['data']);
+                if (!in_array($m['action'], ['projectFolders','userAvatar','projectContext','project','create','message','archive','cancel','approval'])) {
+                    throw new \InvalidArgumentException('Unknown action.');
+                }
+                $result = \app\service\Actions::handle($m['action'], $m['data']);
             }
-            $this->reply($connection,['id'=>$id,'result'=>$result]);
+            $this->reply($connection, ['id' => $id,'result' => $result]);
             $this->publish();
         } catch (\InvalidArgumentException|\JsonException $e) {
-            $this->reply($connection,['id'=>$id,'error'=>$e->getMessage()]);
+            $this->reply($connection, ['id' => $id,'error' => $e->getMessage()]);
         } catch (\Throwable $e) {
             error_log((string)$e);
-            $this->reply($connection,['id'=>$id,'error'=>'Unable to save changes. Please try again.']);
+            $this->reply($connection, ['id' => $id,'error' => 'Unable to save changes. Please try again.']);
         }
     }
     // ponytail: compare subscribed history rows; use database cursors if long histories make this slow.
     private function publish(): void
     {
-        $revision = S::all("SELECT value FROM settings WHERE key='revision'")[0]['value'] ?? '';
-        if ($revision === $this->revision) return;
+        $revision = Store::all("SELECT value FROM settings WHERE key='revision'")[0]['value'] ?? '';
+        if ($revision === $this->revision) {
+            return;
+        }
         $this->revision = $revision;
-        $state = S::snapshot(); $threads = [];
+        $state = Store::snapshot();
+        $threads = [];
         foreach ($this->clients as $id => &$client) {
-            if ($client['state'] === null) continue;
-            $patch = ['type'=>'patch'];
-            foreach ($state as $key=>$value) if ($value !== $client['state'][$key]) $patch['state'][$key] = $value;
+            if ($client['state'] === null) {
+                continue;
+            }
+            $patch = ['type' => 'patch'];
+            foreach ($state as $key => $value) {
+                if ($value !== $client['state'][$key]) {
+                    $patch['state'][$key] = $value;
+                }
+            }
             $client['state'] = $state;
             if ($chatId = $client['chat_id']) {
-                $thread = $threads[$chatId] ??= S::thread($chatId);
+                $thread = $threads[$chatId] ??= Store::thread($chatId);
                 $old = array_column($client['thread']['messages'], null, 'id');
                 foreach ($thread['messages'] as $message) {
                     $before = $old[$message['id']] ?? null;
-                    if ($before === $message) continue;
+                    if ($before === $message) {
+                        continue;
+                    }
                     if ($before && str_starts_with($message['body'], $before['body'])) {
-                        $patch['append'][] = ['id'=>$message['id'],'delta'=>substr($message['body'],strlen($before['body']))];
-                    } else $patch['messages'][] = $message;
+                        $patch['append'][] = ['id' => $message['id'],'delta' => substr($message['body'], strlen($before['body']))];
+                    } else {
+                        $patch['messages'][] = $message;
+                    }
                 }
-                if ($thread['artifacts'] !== $client['thread']['artifacts']) $patch['artifacts'] = $thread['artifacts'];
-                if ($thread['approvals'] !== $client['thread']['approvals']) $patch['approvals'] = $thread['approvals'];
+                if ($thread['artifacts'] !== $client['thread']['artifacts']) {
+                    $patch['artifacts'] = $thread['artifacts'];
+                }
+                if ($thread['approvals'] !== $client['thread']['approvals']) {
+                    $patch['approvals'] = $thread['approvals'];
+                }
                 $patch['chat_id'] = $chatId;
                 $client['thread'] = $thread;
             }
             if (isset($patch['state']) || isset($patch['messages']) || isset($patch['append']) || isset($patch['approvals']) || isset($patch['artifacts'])) {
-                if (isset($this->worker->connections[$id])) $this->reply($this->worker->connections[$id],$patch);
+                if (isset($this->worker->connections[$id])) {
+                    $this->reply($this->worker->connections[$id], $patch);
+                }
             }
         }
         unset($client);
     }
 
-    private function status(string $value): void { S::run("INSERT INTO settings VALUES ('runtime',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", [$value]); }
-    private function send(array $message): void { $this->output .= json_encode($message, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE) . "\n"; }
-    private function rpc(string $method, array $params, callable $callback): void {
+    private function status(string $value): void
+    {
+        Store::run("INSERT INTO settings VALUES ('runtime',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", [$value]);
+    }
+    private function send(array $message): void
+    {
+        $this->output .= json_encode($message, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE) . "\n";
+    }
+    private function rpc(string $method, array $params, callable $callback, ?int $jobId = null): void
+    {
         $id = ++$this->sequence;
-        $this->pending[$id] = $callback;
-        $this->send(['id'=>$id,'method'=>$method,'params'=>(object)$params]);
+        $this->pending[$id] = ['callback' => $callback, 'job_id' => $jobId, 'method' => $method];
+        $this->send(['id' => $id,'method' => $method,'params' => (object)$params]);
     }
 
     private function boot(): void
     {
         $this->bootAttempted = true;
-        $this->status('connecting'); $this->started = microtime(true);
-        $this->process = proc_open([getenv('CODEX_BIN') ?: 'codex','app-server'], [0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']], $this->pipes, dirname(__DIR__,3));
-        if (!is_resource($this->process)) throw new \RuntimeException('Could not start Codex. Check CODEX_BIN.');
-        foreach ($this->pipes as $pipe) stream_set_blocking($pipe, false);
-        $this->rpc('initialize', ['clientInfo'=>['name'=>'crabase','title'=>'Crabase','version'=>'0.1.0']], function ($result) {
-            $this->send(['method'=>'initialized']); $this->ready = true; $this->status('connected'); $this->loadModels();
+        $this->status('connecting');
+        $this->started = microtime(true);
+        $this->process = proc_open([getenv('CODEX_BIN') ?: 'codex','app-server'], [0 => ['pipe','r'],1 => ['pipe','w'],2 => ['pipe','w']], $this->pipes, dirname(__DIR__, 3));
+        if (!is_resource($this->process)) {
+            throw new \RuntimeException('Could not start Codex. Check CODEX_BIN.');
+        }
+        foreach ($this->pipes as $pipe) {
+            stream_set_blocking($pipe, false);
+        }
+        $this->rpc('initialize', ['clientInfo' => ['name' => 'crabase','title' => 'Crabase','version' => '0.1.0']], function ($result) {
+            $this->send(['method' => 'initialized']);
+            $this->ready = true;
+            $this->status('connected');
+            $this->loadModels();
         });
     }
 
     private function loadModels(?string $cursor = null, array $models = []): void
     {
-        $params = ['limit'=>100,'includeHidden'=>false];
-        if ($cursor !== null) $params['cursor'] = $cursor;
+        $params = ['limit' => 100,'includeHidden' => false];
+        if ($cursor !== null) {
+            $params['cursor'] = $cursor;
+        }
         $this->rpc('model/list', $params, function ($result) use ($models) {
             $models = array_merge($models, $result['data']);
-            if (!empty($result['nextCursor'])) { $this->loadModels($result['nextCursor'],$models); return; }
-            S::run("INSERT INTO settings VALUES ('models',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", [json_encode($models,JSON_INVALID_UTF8_SUBSTITUTE)]);
+            if (!empty($result['nextCursor'])) {
+                $this->loadModels($result['nextCursor'], $models);
+                return;
+            }
+            Store::run("INSERT INTO settings VALUES ('models',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", [json_encode($models, JSON_INVALID_UTF8_SUBSTITUTE)]);
         });
     }
     private function tick(): void
     {
         try {
-            if (!$this->bootAttempted && $this->clients) $this->boot();
+            if (!$this->bootAttempted && $this->clients && microtime(true) >= $this->retryAt) {
+                $this->boot();
+            }
             if (is_resource($this->process)) {
-                if (!proc_get_status($this->process)['running']) throw new \RuntimeException('Codex stopped. Check the local Codex installation and login.');
-                if (!$this->ready && microtime(true) - $this->started > 30) throw new \RuntimeException('Codex initialization timed out.');
+                if (!proc_get_status($this->process)['running']) {
+                    throw new \RuntimeException('Codex stopped. Check the local Codex installation and login.');
+                }
+                if (!$this->ready && microtime(true) - $this->started > 30) {
+                    throw new \RuntimeException('Codex initialization timed out.');
+                }
                 if ($this->output !== '') {
                     $written = fwrite($this->pipes[0], $this->output);
-                    if ($written === false) throw new \RuntimeException('Codex connection was closed.');
+                    if ($written === false) {
+                        throw new \RuntimeException('Codex connection was closed.');
+                    }
                     $this->output = substr($this->output, $written);
                 }
                 $stderr = stream_get_contents($this->pipes[2]);
-                if ($stderr) file_put_contents(dirname(__DIR__,2).'/runtime/logs/codex.log', $stderr, FILE_APPEND);
+                if ($stderr) {
+                    file_put_contents(dirname(__DIR__, 2).'/runtime/logs/codex.log', $stderr, FILE_APPEND);
+                }
                 $this->input .= stream_get_contents($this->pipes[1]);
                 while (($end = strpos($this->input, "\n")) !== false) {
-                    $line = substr($this->input,0,$end); $this->input = substr($this->input,$end+1);
-                    $message = json_decode($line,true);
-                    if (is_array($message)) $this->receive($message);
+                    $line = substr($this->input, 0, $end);
+                    $this->input = substr($this->input, $end + 1);
+                    $message = json_decode($line, true);
+                    if (is_array($message)) {
+                        $this->receive($message);
+                    }
                 }
             }
-            foreach ($this->approvals as $id => $rpcId) {
-                $decision = S::all('SELECT decision FROM approvals WHERE id=?', [$id])[0]['decision'] ?? null;
-                if ($decision) {
-                    $this->send(['id'=>$rpcId,'result'=>['decision'=>$decision]]);
-                    unset($this->approvals[$id]);
-                    if ($this->job) S::run("UPDATE chats SET status='running' WHERE id=?", [$this->job['chat_id']]);
+            foreach (array_keys($this->jobs) as $jobId) {
+                foreach ($this->jobs[$jobId]['approvals'] as $approvalId => $rpcId) {
+                    $decision = Store::all('SELECT decision FROM approvals WHERE id=?', [$approvalId])[0]['decision'] ?? null;
+                    if ($decision) {
+                        $this->send(['id' => $rpcId,'result' => ['decision' => $decision]]);
+                        unset($this->jobs[$jobId]['approvals'][$approvalId]);
+                        if (!$this->jobs[$jobId]['approvals']) {
+                            Store::run("UPDATE chats SET status='running' WHERE id=?", [$this->jobs[$jobId]['chat_id']]);
+                        }
+                    }
+                }
+                $row = Store::all('SELECT cancel,turn_id FROM jobs WHERE id=?', [$jobId])[0];
+                if ($row['cancel'] && !empty($row['turn_id']) && empty($this->jobs[$jobId]['interrupting'])) {
+                    $this->jobs[$jobId]['interrupting'] = true;
+                    $this->rpc('turn/interrupt', ['threadId' => $this->jobs[$jobId]['thread_id'],'turnId' => $row['turn_id']], fn ($result) => null, $jobId);
                 }
             }
-            if ($this->job) {
-                $row = S::all('SELECT cancel,turn_id FROM jobs WHERE id=?', [$this->job['id']])[0];
-                if ($row['cancel'] && !empty($row['turn_id']) && empty($this->job['interrupting'])) {
-                    $this->job['interrupting'] = true;
-                    $this->rpc('turn/interrupt', ['threadId'=>$this->job['thread_id'],'turnId'=>$row['turn_id']], fn($r)=>null);
+            Store::run("UPDATE jobs SET status='cancelled' WHERE status='queued' AND cancel=1");
+            Store::run("UPDATE chats SET status='idle' WHERE status='queued' AND NOT EXISTS (SELECT 1 FROM jobs WHERE jobs.chat_id=chats.id AND jobs.status IN ('queued','running'))");
+            $limit = (require dirname(__DIR__, 2).'/config/crabase.php')['parallel_chats'];
+            if (count($this->jobs) >= $limit) {
+                return;
+            }
+            $nextJobs = $this->nextJobs($limit - count($this->jobs));
+            if (!$nextJobs) {
+                return;
+            }
+            if (!$this->process) {
+                if (microtime(true) >= $this->retryAt) {
+                    $this->boot();
                 }
                 return;
             }
-            S::run("UPDATE jobs SET status='cancelled' WHERE status='queued' AND cancel=1", []);
-            S::run("UPDATE chats SET status='idle' WHERE status='queued' AND NOT EXISTS (SELECT 1 FROM jobs WHERE jobs.chat_id=chats.id AND jobs.status='queued')", []);
-            $next = S::all("SELECT j.*, c.thread_id, p.path FROM jobs j JOIN chats c ON c.id=j.chat_id LEFT JOIN projects p ON p.id=c.project_id WHERE j.status='queued' ORDER BY j.id LIMIT 1")[0] ?? null;
-            if (!$next) return;
-            if (!$this->process) { $this->boot(); return; }
-            if (!$this->ready) return;
-            $this->job = $next; $this->items = [];
-            S::run("UPDATE jobs SET status='running' WHERE id=?", [$next['id']]);
-            S::run("UPDATE chats SET status='running' WHERE id=?", [$next['chat_id']]);
+            if (!$this->ready) {
+                return;
+            }
+            foreach ($nextJobs as $next) {
+                $this->startJob($next);
+            }
+        } catch (\Throwable $error) {
+            foreach (array_keys($this->jobs) as $jobId) {
+                $this->finish($jobId, 'failed', $error->getMessage());
+            }
+            $this->shutdown();
+            $this->retryAt = microtime(true) + 5;
+            $this->status('error');
+            error_log('Crabase: '.$error->getMessage());
+        }
+    }
+
+    private function nextJobs(int $limit): array
+    {
+        return Store::all("SELECT j.*, c.thread_id, p.path FROM jobs j
+            JOIN chats c ON c.id=j.chat_id LEFT JOIN projects p ON p.id=c.project_id
+            WHERE j.status='queued' AND j.cancel=0
+            AND NOT EXISTS (SELECT 1 FROM jobs active WHERE active.chat_id=j.chat_id AND active.status='running')
+            AND NOT EXISTS (SELECT 1 FROM jobs earlier WHERE earlier.chat_id=j.chat_id AND earlier.status='queued' AND earlier.cancel=0 AND earlier.id<j.id)
+            ORDER BY j.id LIMIT ?", [$limit]);
+    }
+
+    private function startJob(array $next): void
+    {
+        $jobId = (int)$next['id'];
+        $this->jobs[$jobId] = $next + ['items' => [], 'approvals' => [], 'activity' => []];
+        Store::run("UPDATE jobs SET status='running' WHERE id=?", [$jobId]);
+        Store::run("UPDATE chats SET status='running' WHERE id=?", [$next['chat_id']]);
+        try {
             if (!$next['path']) {
-                $next['path'] = dirname(__DIR__,2).'/runtime/chats/'.$next['chat_id'];
-                if (!is_dir($next['path']) && !mkdir($next['path'],0700,true)) throw new \RuntimeException('Could not create chat directory.');
+                $next['path'] = dirname(__DIR__, 2).'/runtime/chats/'.$next['chat_id'];
+                if (!is_dir($next['path']) && !mkdir($next['path'], 0700, true)) {
+                    throw new \RuntimeException('Could not create chat directory.');
+                }
             }
             $outputDirectory = \app\service\Artifacts::directory($next['chat_id']);
-            $publisher = dirname(__DIR__,2).'/bin/publish-artifact.php';
+            $publisher = dirname(__DIR__, 2).'/bin/publish-artifact.php';
             $publishCommand = 'php '.escapeshellarg($publisher).' '.escapeshellarg($next['chat_id']);
-            $params = ['cwd'=>$next['path'],'approvalPolicy'=>'never','sandbox'=>'danger-full-access',
-                'developerInstructions'=>"Save user-facing deliverables in $outputDirectory. To publish any finished file, run $publishCommand ABSOLUTE_FILE_PATH (shell-quote the file path). This command copies the file into persistent artifact storage and returns JSON with its actual url. Always publish deliverables with this command and share the returned url verbatim using Markdown links, or image Markdown for raster images. If a skill saves elsewhere, publish that file with the same command. Do not invent download URLs or share filesystem paths. Keep normal project source edits in the project folder. Publish only requested deliverables, never secrets or credentials."];
+            $params = ['cwd' => $next['path'],'approvalPolicy' => 'never','sandbox' => 'danger-full-access',
+                'developerInstructions' => "Save user-facing deliverables in $outputDirectory. To publish any finished file, run $publishCommand ABSOLUTE_FILE_PATH (shell-quote the file path). This command copies the file into persistent artifact storage and returns JSON with its actual url. Always publish deliverables with this command and share the returned url verbatim using Markdown links, or image Markdown for raster images. If a skill saves elsewhere, publish that file with the same command. Do not invent download URLs or share filesystem paths. Keep normal project source edits in the project folder. Publish only requested deliverables, never secrets or credentials."];
 
-            if ($next['thread_id']) $params['threadId'] = $next['thread_id'];
-            $this->rpc($next['thread_id'] ? 'thread/resume' : 'thread/start', $params, function ($result) {
-                $thread = $result['thread']['id']; $this->job['thread_id'] = $thread;
-                S::run('UPDATE chats SET thread_id=? WHERE id=?', [$thread,$this->job['chat_id']]);
-                $turnParams = ['threadId'=>$thread,'input'=>[['type'=>'text','text'=>$this->job['prompt']]]];
-                if ($this->job['model'] !== null) $turnParams['model'] = $this->job['model'];
-                if ($this->job['effort'] !== null) $turnParams['effort'] = $this->job['effort'];
-                $this->rpc('turn/start', $turnParams, function ($result) {
-                    if ($this->job) S::run('UPDATE jobs SET turn_id=? WHERE id=?', [$result['turn']['id'],$this->job['id']]);
-                });
-            });
-        } catch (\Throwable $e) {
-            if ($this->job) $this->finish('failed', $e->getMessage());
-            else {
-                $queued = S::all("SELECT * FROM jobs WHERE status='queued' ORDER BY id LIMIT 1")[0] ?? null;
-                if ($queued) { $this->job = $queued; $this->finish('failed',$e->getMessage()); }
+            if ($next['thread_id']) {
+                $params['threadId'] = $next['thread_id'];
             }
-            $this->shutdown(); $this->status('error');
-            error_log('Crabase: '.$e->getMessage());
+            $this->rpc($next['thread_id'] ? 'thread/resume' : 'thread/start', $params, function ($result) use ($jobId) {
+                if (!isset($this->jobs[$jobId])) {
+                    return;
+                }
+                $thread = $result['thread']['id'];
+                $this->jobs[$jobId]['thread_id'] = $thread;
+                Store::run('UPDATE chats SET thread_id=? WHERE id=?', [$thread, $this->jobs[$jobId]['chat_id']]);
+                if (Store::all('SELECT cancel FROM jobs WHERE id=?', [$jobId])[0]['cancel']) {
+                    $this->finish($jobId, 'cancelled');
+                    return;
+                }
+                $job = $this->jobs[$jobId];
+                $turnParams = ['threadId' => $thread,'input' => [['type' => 'text','text' => $job['prompt']]]];
+                if ($job['model'] !== null) {
+                    $turnParams['model'] = $job['model'];
+                }
+                if ($job['effort'] !== null) {
+                    $turnParams['effort'] = $job['effort'];
+                }
+                $this->rpc('turn/start', $turnParams, function ($result) use ($jobId) {
+                    if (!isset($this->jobs[$jobId])) {
+                        return;
+                    }
+                    $this->jobs[$jobId]['turn_id'] = $result['turn']['id'];
+                    Store::run('UPDATE jobs SET turn_id=? WHERE id=?', [$result['turn']['id'], $jobId]);
+                }, $jobId);
+            }, $jobId);
+        } catch (\Throwable $error) {
+            $this->finish($jobId, 'failed', $error->getMessage());
         }
+    }
+
+    private function jobForThread(string $threadId): ?int
+    {
+        foreach ($this->jobs as $jobId => $job) {
+            if (($job['thread_id'] ?? null) === $threadId || isset($job['activity']['agents'][$threadId])) {
+                return $jobId;
+            }
+        }
+        return null;
     }
 
     private function receive(array $m): void
     {
         if (isset($m['id']) && !isset($m['method'])) {
-            $callback = $this->pending[$m['id']] ?? null; unset($this->pending[$m['id']]);
-            if (isset($m['error'])) throw new \RuntimeException($m['error']['message'] ?? 'Codex request failed.');
-            if ($callback) $callback($m['result'] ?? []);
+            $pending = $this->pending[$m['id']] ?? null;
+            unset($this->pending[$m['id']]);
+            if (!$pending) {
+                return;
+            }
+            $jobId = $pending['job_id'];
+            if ($jobId !== null && !isset($this->jobs[$jobId])) {
+                return;
+            }
+            if (isset($m['error'])) {
+                $error = $m['error']['message'] ?? 'Codex request failed.';
+                if ($jobId !== null && $pending['method'] === 'turn/interrupt') {
+                    $this->item($jobId, 'interrupt-error', 'error', Store::agentName(), 'Unable to stop this turn: '.$error);
+                    return;
+                }
+                if ($jobId !== null) {
+                    $this->finish($jobId, 'failed', $error);
+                    return;
+                }
+                throw new \RuntimeException($error);
+            }
+            try {
+                ($pending['callback'])($m['result'] ?? []);
+            } catch (\Throwable $error) {
+                if ($jobId === null) {
+                    throw $error;
+                }
+                $this->finish($jobId, 'failed', $error->getMessage());
+            }
             return;
         }
-        if (isset($m['id'], $m['method'])) {
-            if ($this->job && in_array($m['method'], ['item/commandExecution/requestApproval','item/fileChange/requestApproval'])) {
-                S::run('INSERT INTO approvals (chat_id,rpc_id,method,details) VALUES (?,?,?,?)', [$this->job['chat_id'],json_encode($m['id']),$m['method'],json_encode($m['params'],JSON_INVALID_UTF8_SUBSTITUTE)]);
-                $id = (int)S::db()->lastInsertId(); $this->approvals[$id] = $m['id'];
-                S::run("UPDATE chats SET status='approval' WHERE id=?", [$this->job['chat_id']]);
-            } else $this->send(['id'=>$m['id'],'error'=>['code'=>-32601,'message'=>'This client does not support this interaction yet.']]);
-            return;
-        }
-        if (!$this->job) return;
         $p = $m['params'] ?? [];
-        if (isset($p['threadId']) && $p['threadId'] !== ($this->job['thread_id'] ?? null)) return;
+        $jobId = $this->jobForThread($p['threadId'] ?? '');
+        if (isset($m['id'], $m['method'])) {
+            if ($jobId !== null && in_array($m['method'], ['item/commandExecution/requestApproval','item/fileChange/requestApproval'])) {
+                $agentId = $m['params']['threadId'] ?? '';
+                if (isset($this->jobs[$jobId]['activity']['agents'][$agentId])) {
+                    $this->jobs[$jobId]['activity']['agents'][$agentId]['status'] = 'waiting';
+                    $this->saveAgentActivity($jobId);
+                }
+                Store::run('INSERT INTO approvals (chat_id,rpc_id,method,details) VALUES (?,?,?,?)', [$this->jobs[$jobId]['chat_id'],json_encode($m['id']),$m['method'],json_encode($m['params'], JSON_INVALID_UTF8_SUBSTITUTE)]);
+                $id = (int)Store::db()->lastInsertId();
+                $this->jobs[$jobId]['approvals'][$id] = $m['id'];
+                Store::run("UPDATE chats SET status='approval' WHERE id=?", [$this->jobs[$jobId]['chat_id']]);
+            } else {
+                $this->send(['id' => $m['id'],'error' => ['code' => -32601,'message' => 'This client does not support this interaction yet.']]);
+            }
+            return;
+        }
+        if ($jobId === null) {
+            return;
+        }
+        if (isset($p['threadId']) && $p['threadId'] !== ($this->jobs[$jobId]['thread_id'] ?? null)) {
+            $activity = \app\service\AgentActivity::child($this->jobs[$jobId]['activity'], $m['method'] ?? '', $p);
+            if ($activity !== $this->jobs[$jobId]['activity']) {
+                $this->jobs[$jobId]['activity'] = $activity;
+                $this->saveAgentActivity($jobId);
+            }
+            return;
+        }
+        if (($m['method'] ?? '') === 'turn/started') {
+            if (!empty($this->jobs[$jobId]['turn_id']) && $this->jobs[$jobId]['turn_id'] !== $p['turn']['id']) {
+                return;
+            }
+            $this->jobs[$jobId]['turn_id'] = $p['turn']['id'];
+            Store::run('UPDATE jobs SET turn_id=? WHERE id=?', [$p['turn']['id'], $jobId]);
+        }
+        $eventTurn = $p['turnId'] ?? $p['turn']['id'] ?? null;
+        if ($eventTurn !== null && $eventTurn !== ($this->jobs[$jobId]['turn_id'] ?? null)) {
+            return;
+        }
         if (($m['method'] ?? '') === 'item/agentMessage/delta') {
-            $id = $this->item($p['itemId'], 'assistant', S::agentName(), '');
-            S::run('UPDATE messages SET body=body || ? WHERE id=?', [$p['delta'],$id]);
+            $id = $this->item($jobId, $p['itemId'], 'assistant', Store::agentName(), '');
+            Store::run('UPDATE messages SET body=body || ? WHERE id=?', [$p['delta'],$id]);
         }
         if (in_array($m['method'] ?? '', ['item/started','item/completed'])) {
-            $item = $p['item']; $type = $item['type'];
+            $item = $p['item'];
+            $type = $item['type'];
+            if (in_array($type, ['collabAgentToolCall','subAgentActivity'], true)) {
+                $this->jobs[$jobId]['activity'] = \app\service\AgentActivity::apply($this->jobs[$jobId]['activity'], $item);
+                $this->saveAgentActivity($jobId);
+            }
             if ($type === 'agentMessage' && isset($item['text'])) {
-                $id = $this->item($item['id'], 'assistant',S::agentName(),'');
-                S::run('UPDATE messages SET body=? WHERE id=?', [$item['text'],$id]);
+                $id = $this->item($jobId, $item['id'], 'assistant', Store::agentName(), '');
+                Store::run('UPDATE messages SET body=? WHERE id=?', [$item['text'],$id]);
             }
             if ($type === 'commandExecution') {
                 $body = ($item['command'] ?? 'Command') . "\n" . substr($item['aggregatedOutput'] ?? '', -16000);
-                $id = $this->item($item['id'], 'tool','Terminal',$body);
-                S::run('UPDATE messages SET body=? WHERE id=?', [$body,$id]);
+                $id = $this->item($jobId, $item['id'], 'tool', 'Terminal', $body);
+                Store::run('UPDATE messages SET body=? WHERE id=?', [$body,$id]);
             }
             if ($type === 'fileChange') {
-                $body = implode("\n",array_map(fn($c)=>$c['path'] ?? 'File changed', $item['changes'] ?? []));
-                $this->item($item['id'],'tool','File changes',$body);
+                $body = implode("\n", array_map(fn ($c) => $c['path'] ?? 'File changed', $item['changes'] ?? []));
+                $this->item($jobId, $item['id'], 'tool', 'File changes', $body);
             }
         }
         if (($m['method'] ?? '') === 'turn/completed') {
             $turn = $p['turn'];
-            $this->finish($turn['status'], $turn['error']['message'] ?? null);
+            $this->finish($jobId, $turn['status'], $turn['error']['message'] ?? null);
         }
     }
-    private function item(string $key, string $role, string $author, string $body): int {
-        if (!isset($this->items[$key])) {
-            S::run('INSERT INTO messages (chat_id,role,author,body,created_at) VALUES (?,?,?,?,?)', [$this->job['chat_id'],$role,$author,$body,gmdate('c')]);
-            $this->items[$key] = (int)S::db()->lastInsertId();
+    private function saveAgentActivity(int $jobId): void
+    {
+        if (empty($this->jobs[$jobId]['activity']['agents'])) {
+            return;
         }
-        return $this->items[$key];
+        $id = $this->item($jobId, 'agent-activity', 'agent_activity', Store::agentName(), '');
+        Store::run('UPDATE messages SET body=? WHERE id=?', [json_encode($this->jobs[$jobId]['activity'], JSON_INVALID_UTF8_SUBSTITUTE), $id]);
     }
-    private function finish(string $status, ?string $error = null): void {
-        $chat = $this->job['chat_id'];
-        if ($error) $this->item('error-'.microtime(true),'error',S::agentName(),$error);
-        S::run('UPDATE jobs SET status=? WHERE id=?', [$status,$this->job['id']]);
-        $queued = S::all("SELECT id FROM jobs WHERE chat_id=? AND status='queued'", [$chat]);
-        S::run('UPDATE chats SET status=?, updated_at=? WHERE id=?', [$queued ? 'queued' : 'idle',gmdate('c'),$chat]);
-        S::run("UPDATE approvals SET decision='decline' WHERE chat_id=? AND decision IS NULL", [$chat]);
-        S::event($chat, S::agentName().' turn '.$status);
-        $this->job = null; $this->items = []; $this->approvals = [];
+    private function item(int $jobId, string $key, string $role, string $author, string $body): int
+    {
+        if (!isset($this->jobs[$jobId]['items'][$key])) {
+            Store::run('INSERT INTO messages (chat_id,role,author,body,created_at) VALUES (?,?,?,?,?)', [$this->jobs[$jobId]['chat_id'],$role,$author,$body,gmdate('c')]);
+            $this->jobs[$jobId]['items'][$key] = (int)Store::db()->lastInsertId();
+        }
+        return $this->jobs[$jobId]['items'][$key];
     }
-    private function shutdown(): void {
-        foreach ($this->pipes as $pipe) if (is_resource($pipe)) fclose($pipe);
-        if (is_resource($this->process)) { proc_terminate($this->process); proc_close($this->process); }
-        $this->process = null; $this->pipes = []; $this->pending = []; $this->ready = false; $this->output = ''; $this->input = '';
+    private function finish(int $jobId, string $status, ?string $error = null): void
+    {
+        $chat = $this->jobs[$jobId]['chat_id'];
+        if ($this->jobs[$jobId]['activity']) {
+            $this->jobs[$jobId]['activity'] = \app\service\AgentActivity::finish($this->jobs[$jobId]['activity']);
+            $this->saveAgentActivity($jobId);
+        }
+        if ($error) {
+            $this->item($jobId, 'error-'.microtime(true), 'error', Store::agentName(), $error);
+        }
+        Store::run('UPDATE jobs SET status=? WHERE id=?', [$status,$this->jobs[$jobId]['id']]);
+        $queued = Store::all("SELECT id FROM jobs WHERE chat_id=? AND status='queued'", [$chat]);
+        Store::run('UPDATE chats SET status=?, updated_at=? WHERE id=?', [$queued ? 'queued' : 'idle',gmdate('c'),$chat]);
+        Store::run("UPDATE approvals SET decision='decline' WHERE chat_id=? AND decision IS NULL", [$chat]);
+        Store::event($chat, Store::agentName().' turn '.$status);
+        foreach ($this->jobs[$jobId]['approvals'] as $rpcId) {
+            $this->send(['id' => $rpcId,'result' => ['decision' => 'decline']]);
+        }
+        unset($this->jobs[$jobId]);
+        foreach ($this->pending as $id => $pending) {
+            if ($pending['job_id'] === $jobId) {
+                unset($this->pending[$id]);
+            }
+        }
     }
-    public function onWorkerStop(): void {
-        if ($this->job) $this->finish('interrupted', 'The workspace server stopped. Send a new message to resume.');
-        $this->shutdown(); $this->status('offline');
+    private function shutdown(): void
+    {
+        foreach ($this->pipes as $pipe) {
+            if (is_resource($pipe)) {
+                fclose($pipe);
+            }
+        }
+        if (is_resource($this->process)) {
+            proc_terminate($this->process);
+            proc_close($this->process);
+        }
+        $this->process = null;
+        $this->pipes = [];
+        $this->pending = [];
+        $this->ready = false;
+        $this->output = '';
+        $this->input = '';
+    }
+    public function onWorkerStop(): void
+    {
+        foreach (array_keys($this->jobs) as $jobId) {
+            $this->finish($jobId, 'interrupted', 'The workspace server stopped. Send a new message to resume.');
+        }
+        $this->shutdown();
+        $this->status('offline');
     }
 }
