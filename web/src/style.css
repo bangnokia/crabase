@@ -119,7 +119,7 @@ kbd {
   flex-direction: column;
   background: var(--sidebar);
   border-right: 1px solid var(--line);
-  padding: 20px 12px 0;
+  padding: 12px 8px 0;
 }
 .brand-row {
   display: flex;
@@ -359,7 +359,7 @@ kbd {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
+  padding: 0 12px;
   gap: 15px;
 }
 .breadcrumb {
@@ -424,7 +424,7 @@ kbd {
 .home-scroll {
   overflow: auto;
   flex: 1;
-  padding: 0 24px 28px;
+  padding: 0 12px 20px;
 }
 .welcome {
   max-width: 740px;

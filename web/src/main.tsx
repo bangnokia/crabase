@@ -729,7 +729,6 @@ function App() {
                 className={`thread-link ${selected === c.id ? "current" : ""}`}
                 onClick={() => open(c.id)}
               >
-                <MessageSquare size={13} />
                 <span>{c.title}</span>
               </button>
             ))}
@@ -801,9 +800,7 @@ function App() {
                         <span
                           className={`thread-status ${c.status === "idle" ? "" : "working"}`}
                         >
-                          {c.status === "idle" ? (
-                            <MessageSquare size={13} />
-                          ) : (
+                          {c.status === "idle" ? null : (
                             <Loader2 size={13} className="spin" />
                           )}
                         </span>
@@ -969,7 +966,7 @@ function App() {
                                 m.role === "guide" ? (
                                   <Crab size={23} />
                                 ) : (
-                                  m.author.slice(0, 1).toUpperCase()
+                                  avatar
                                 )}
                               </span>
                               <strong>
