@@ -550,9 +550,6 @@ function App() {
           />
           <div className="composer-controls">
             <div className="composer-options">
-              <span className="composer-mode-label">
-                <MessageSquare size={14} /> Team chat
-              </span>
               {true ? (
                 <div className="agent-options">
                   <span className="mode-select model-select">
