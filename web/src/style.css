@@ -254,6 +254,9 @@ kbd {
   color: var(--subtle);
   margin: 2px 0;
 }
+.chat-avatars { display: inline-flex; width: 22px; }
+.chat-avatars i { width: 14px; height: 14px; border-radius: 50%; font-style: normal; font-size: 9px; display: grid; place-items: center; background: var(--surface); border: 1px solid var(--line); }
+.chat-avatars i + i { margin-left: -5px; }
 .recent-section { display: none; }
 .thread-link > span:last-child {
   overflow: hidden;

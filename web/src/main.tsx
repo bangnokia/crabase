@@ -785,7 +785,7 @@ function App() {
                         <span
                           className={`thread-status ${c.status === "idle" ? "" : "working"}`}
                         >
-                          {c.status === "idle" ? <Users size={13} /> : (
+                          {c.status === "idle" ? <span className="chat-avatars"><i>🙂</i><i>😎</i></span> : (
                             <Loader2 size={13} className="spin" />
                           )}
                         </span>
