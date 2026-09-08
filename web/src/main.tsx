@@ -806,7 +806,7 @@ function App() {
               className="profile-button"
               onClick={() => setDialog("settings")}
             >
-              <span className={`avatar avatar-${name}`}>{avatar}</span>
+              <img className={`avatar avatar-${name}`} src={name === "user2" ? "https://i.pravatar.cc/64?img=47" : "https://i.pravatar.cc/64?img=12"} alt={name} />
               <span>
                 <strong>{name}</strong>
               </span>
