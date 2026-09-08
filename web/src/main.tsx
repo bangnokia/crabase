@@ -964,14 +964,6 @@ function App() {
                   }}
                 >
                   <div className="conversation-inner">
-                    <div className="thread-meta">
-                      <Users size={14} />
-                      <span>
-                        {chat?.project_id ? "Project thread" : "Chat"}
-                      </span>
-                      <span>·</span>
-                      <span>{chat ? time(chat.updated_at) : ""}</span>
-                    </div>
                     {messages.map((m) => (
                       <article key={m.id} className={`message ${m.role}`}>
                         {m.role === "tool" ? (
