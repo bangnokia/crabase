@@ -1112,7 +1112,6 @@ function App() {
                   <h1>
                     {project ? "What should we build?" : "What’s on your mind?"}
                   </h1>
-                  <p>Your team. Your code. One shared workspace.</p>
                   <div className="project-picker">
                     <Folder size={15} />
                     <select
@@ -1130,7 +1129,7 @@ function App() {
                     <ChevronDown size={13} />
                   </div>
                   {composerUI}
-                  <div className="suggestions">
+                  {/* suggestions removed */}{false && <div className="suggestions">
                     {(project
                       ? [
                           {
@@ -1180,7 +1179,7 @@ function App() {
                         <ArrowUpRight size={14} />
                       </button>
                     ))}
-                  </div>
+                  </div>}
                 </section>
                 <section className="recent-section">
                   <div className="recent-heading">
