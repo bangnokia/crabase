@@ -28,6 +28,10 @@ final class Artifacts
         $name = preg_replace('/[^a-zA-Z0-9._-]/', '_', basename($file));
         $name = substr(ltrim($name, '.'), -180) ?: 'file';
         $directory = self::directory($chatId);
+        if (dirname($file) === $directory) {
+            if (basename($file) !== $name) throw new \InvalidArgumentException('Artifact filename contains unsupported characters.');
+            return ['name'=>$name, 'url'=>'/files/'.$chatId.'/'.$name];
+        }
         // Exclusive creation preserves previously shared files, including simultaneous publications.
         do { $published = bin2hex(random_bytes(6)).'-'.$name; $target = $directory.'/'.$published; }
         while (file_exists($target));

@@ -16,6 +16,13 @@ try {
     artifactCheck($first['url'] !== $second['url']);
     artifactCheck($first['url'] === '/files/'.$chat.'/'.$first['name']);
     artifactCheck(file_get_contents(A::resolve($chat, $first['name'])['path']) === file_get_contents($root.'/report.csv'));
+    $directPath = A::directory($chat).'/preview.png';
+    file_put_contents($directPath, 'image');
+    $direct = A::publish($chat, $directPath);
+    artifactCheck($direct['name'] === 'preview.png');
+    artifactCheck(count(A::listing($chat)) === 3);
+    artifactCheck(A::publish($chat, $directPath) === $direct);
+    artifactCheck(count(A::listing($chat)) === 3);
     foreach (['../report.csv', '.secret', 'missing', "bad\0file"] as $bad) artifactCheck(A::resolve($chat, $bad) === null);
     artifactCheck(A::resolve('../escape', $first['name']) === null);
     symlink($root.'/report.csv', A::directory($chat).'/escape.csv');

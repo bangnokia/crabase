@@ -247,7 +247,7 @@ Restart the running backend after configuration changes. This names the agent in
 
 ### Generated files
 
-Deliverables are stored persistently under the configured `CRABASE_WORKSPACE_ROOT` in `.artifacts/<chat-id>/`. The agent receives a publish command that copies a finished file and returns its browser URL. Images can preview in chat; all file types can download through the local PHP server. Existing raw filesystem links must be republished. Back up `.artifacts` alongside the database; do not treat it as a temporary directory.
+Deliverables are stored persistently under the configured `CRABASE_WORKSPACE_ROOT` in `.artifacts/<chat-id>/`. The agent generates them there and runs a publish command that registers the file and returns its browser URL; files created elsewhere are copied in. Images can preview in chat; all file types can download through the local PHP server. Existing raw filesystem links must be republished. Back up `.artifacts` alongside the database; do not treat it as a temporary directory.
 
 ### Database migrations (Phinx)
 
