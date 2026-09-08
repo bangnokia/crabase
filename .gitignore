@@ -1,0 +1,8 @@
+node_modules/
+server/vendor/
+server/runtime/*
+!server/runtime/.gitkeep
+server/public/assets/
+server/public/index.html
+.env
+.DS_Store
