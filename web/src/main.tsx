@@ -182,6 +182,7 @@ function App() {
   const chatFromUrl = () => location.pathname.startsWith("/chat/") ? location.pathname.slice(6) : "";
   const [selected, setSelected] = useState(chatFromUrl),
     [project, setProject] = useState("");
+  const [avatar, setAvatar] = useState(localStorage.getItem("crabase.avatar") || "🙂");
   const [messages, setMessages] = useState<Message[]>([]),
     [approvals, setApprovals] = useState<Approval[]>([]);
   const [view, setView] = useState("home"),
@@ -394,6 +395,7 @@ function App() {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("crabase.theme", theme);
   }, [theme]);
+  useEffect(() => { localStorage.setItem("crabase.avatar", avatar); }, [avatar]);
   useEffect(() => {
     sessionStorage.setItem("crabase.test-user", name);
     // Consume the launch selector; reloading and shared thread links keep each tab's identity.
@@ -819,7 +821,7 @@ function App() {
               className="profile-button"
               onClick={() => setDialog("settings")}
             >
-              <span className="avatar">{name === "user2" ? "U2" : "U1"}</span>
+              <span className={`avatar avatar-${name}`}>{avatar}</span>
               <span>
                 <strong>{name}</strong>
               </span>
@@ -1407,6 +1409,11 @@ function App() {
             >
               <option value="user1">user1</option>
               <option value="user2">user2</option>
+            </select>
+          </label>
+          <label>Avatar
+            <select value={avatar} onChange={(e) => setAvatar(e.target.value)}>
+              {['🙂','😎','🌟','🐱','🚀'].map((v) => <option key={v}>{v}</option>)}
             </select>
           </label>
           <label>Appearance</label>

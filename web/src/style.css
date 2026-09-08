@@ -331,6 +331,8 @@ kbd {
   font-size: 13px;
   font-weight: 600;
 }
+.avatar-user1 { background: #dbeafe; }
+.avatar-user2 { background: #fce7f3; }
 .profile-button strong {
   font-size: 13px;
   font-weight: 550;
