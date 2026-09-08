@@ -733,6 +733,7 @@ function App() {
                 className={`thread-link ${selected === c.id ? "current" : ""}`}
                 onClick={() => open(c.id)}
               >
+                <span className="chat-avatars"><i className="photo-user1" /><i className="photo-user2" /></span>
                 <span>{c.title}</span>
               </button>
             ))}
