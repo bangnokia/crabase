@@ -11,6 +11,8 @@ npm install
 composer install --working-dir=server
 npm run build
 cd server
+vendor/bin/phinx migrate
+vendor/bin/phinx seed:run  # Optional: add this repository as a project
 php start.php start
 ```
 
@@ -28,7 +30,7 @@ If `codex` is not on PHP's PATH, set `CODEX_BIN` to its absolute executable path
 - Real Codex requests, streamed responses, terminal/file activity, command/file approval dialogs, cancellation, and queued requests.
 - SQLite in WAL mode, busy timeout, foreign keys, prepared statements, and short transactions.
 
-The three starter conversations are clearly identified as getting-started content, not real agent runs. In the composer, **Enter** or the send arrow invokes the agent; the note icon only saves a message. Notes are not automatically injected into the agent's context. Project paths are selected on the server's filesystem, not uploaded from a browser.
+Existing installations may retain the three getting-started conversations; fresh databases no longer create them automatically. In the composer, **Enter** or the send arrow invokes the agent; the note icon only saves a message. Notes are not automatically injected into the agent's context. Project paths are selected on the server's filesystem, not uploaded from a browser.
 
 ## Current boundary
 
@@ -96,3 +98,23 @@ Restart the running backend after configuration changes. This names the agent in
 ### Generated files
 
 Deliverables are stored persistently under the configured `CRABASE_WORKSPACE_ROOT` in `.artifacts/<chat-id>/`. The agent receives a publish command that copies a finished file and returns its browser URL. Images can preview in chat; all file types can download through the local PHP server. Existing raw filesystem links must be republished. Back up `.artifacts` alongside the database; do not treat it as a temporary directory.
+
+### Database migrations (Phinx)
+
+Run from `server/`. Phinx and the application use the same `CRABASE_DB` path (default `server/runtime/crabase.sqlite`), including `.env`. Configuration is in `server/phinx.php`; versioned PHP migrations live in `server/database/migrations/`.
+
+```bash
+vendor/bin/phinx status
+vendor/bin/phinx create AddChatDescription
+vendor/bin/phinx migrate
+vendor/bin/phinx rollback  # Latest migration; development database only
+vendor/bin/phinx migrate   # Reapply after editing an unshipped migration
+```
+
+Use explicit `up()` and `down()` methods for changes that cannot be automatically reversed by `change()`. Once deployed, leave migration files unchanged and add another migration. Phinx records applied versions in `phinxlog`. SQLite migrations run transactionally; irreversible data loss requires a backup, even when schema rollback is possible.
+
+For isolated development, prefix **every command** with `CRABASE_DB=/absolute/path/dev.sqlite`. Rolling back the initial migration drops all application tables and their data. Do not run it against the workspace database you want to keep. Artifact files are outside migration scope.
+
+Deployment: stop the server, create a consistent SQLite backup using SQLite's backup API (including WAL contents), run `vendor/bin/phinx migrate`, and start the server only after success. Workers no longer create, upgrade, or seed tables on connection. `vendor/bin/phinx seed:run` optionally registers the Crabase project; it does not insert dummy conversations.
+
+The initial migration can adopt the current pre-Phinx schema without rewriting application rows. It rejects older/incompatible columns; upgrade those databases using the previous application release first. Always back up before adoption.

@@ -26,7 +26,8 @@
   "require": {
     "php": ">=8.1",
     "workerman/webman-framework": "^2.1",
-    "monolog/monolog": "^2.0"
+    "monolog/monolog": "^2.0",
+    "robmorgan/phinx": "^0.16"
   },
   "suggest": {
     "ext-event": "For better performance. "
@@ -57,5 +58,10 @@
     ]
   },
   "minimum-stability": "dev",
-  "prefer-stable": true
+  "prefer-stable": true,
+  "config": {
+    "platform": {
+      "php": "8.1.0"
+    }
+  }
 }

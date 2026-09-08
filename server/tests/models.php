@@ -6,7 +6,10 @@ $path = tempnam(sys_get_temp_dir(), 'crabase-models-');
 putenv('CRABASE_DB='.$path);
 function check(bool $ok): void { if (!$ok) throw new RuntimeException('Model selection check failed.'); }
 try {
+    $process = proc_open([PHP_BINARY, dirname(__DIR__).'/vendor/bin/phinx', 'migrate', '-c', dirname(__DIR__).'/phinx.php'], [0=>['file','/dev/null','r'],1=>['file','/dev/null','w'],2=>STDERR], $pipes);
+    check(is_resource($process) && proc_close($process) === 0);
     S::db();
+    S::run('INSERT INTO projects VALUES (?,?,?)', ['test', 'Test', dirname(__DIR__, 2)]);
     $project = S::all('SELECT id FROM projects LIMIT 1')[0]['id'];
     check(array_key_exists('branch', A::handle('projectContext', ['project_id'=>$project])));
     try { A::handle('projectContext', ['project_id'=>'missing']); throw new RuntimeException('Missing project accepted'); }
