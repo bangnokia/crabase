@@ -254,6 +254,7 @@ kbd {
   color: var(--subtle);
   margin: 2px 0;
 }
+.recent-section { display: none; }
 .thread-link > span:last-child {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -356,7 +357,7 @@ kbd {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 27px;
+  padding: 0 20px;
   gap: 15px;
 }
 .breadcrumb {
@@ -421,7 +422,7 @@ kbd {
 .home-scroll {
   overflow: auto;
   flex: 1;
-  padding: 0 38px 36px;
+  padding: 0 24px 28px;
 }
 .welcome {
   max-width: 740px;
@@ -1806,3 +1807,4 @@ label input:focus {
 }
 
 .composer-mode-label{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:550;color:var(--subtle)}.agent-send-button{width:31px;height:31px;border:1px solid var(--line);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--subtle);background:var(--paper)}.agent-send-button:hover:not(:disabled){color:var(--text);background:var(--hover)}.agent-send-button:disabled{opacity:.4;cursor:not-allowed}
+.project-picker { display: none; }
