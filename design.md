@@ -88,6 +88,8 @@ Use 6–8px radii for rows and controls, 16–20px for the composer and dialogs,
 
 ### Sidebar
 
+- ⌘B (Ctrl+B on Windows/Linux) toggles the sidebar; on mobile it toggles the drawer.
+
 - Desktop sidebar width is draggable from its right edge, from 200px to a maximum of 500px (default 232px). The separator supports Left/Right arrows and Home/End. Mobile keeps the fixed-width drawer.
 
 - Keep “New chat”, search, standalone chats, projects, and the user profile easy to scan.

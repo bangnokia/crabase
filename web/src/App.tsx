@@ -3,6 +3,7 @@ import { Check } from "lucide-react";
 import { useRoute } from "./hooks/useRoute";
 import { useWorkspace } from "./hooks/useWorkspace";
 import { usePreferences } from "./hooks/usePreferences";
+import { isSidebarShortcut } from "./lib/shortcuts";
 import { chatPath } from "./lib/routes";
 import { Sidebar } from "./components/Sidebar";
 import { Header } from "./components/Header";
@@ -63,6 +64,16 @@ export function App() {
       if ((event.metaKey || event.ctrlKey) && event.key === "n") {
         event.preventDefault();
         newChat();
+      }
+      if (isSidebarShortcut(event)) {
+        event.preventDefault();
+        if (window.innerWidth <= 760) {
+          setSidebarHidden(false);
+          setSidebar((visible) => !visible);
+        } else {
+          setSidebar(false);
+          setSidebarHidden((hidden) => !hidden);
+        }
       }
       if (event.key === "Escape") setSidebar(false);
     };

@@ -61,3 +61,31 @@ test("sidebar resizing stays within its 200–500px bounds", async () => {
   assert.equal(clampSidebarWidth(450), 450);
   assert.equal(clampSidebarWidth(900), 500);
 });
+
+test("sidebar shortcut accepts Command/Ctrl+B without repeats or conflicting modifiers", async () => {
+  const { isSidebarShortcut } = await import("../src/lib/shortcuts.ts");
+  const event = {
+    key: "b",
+    metaKey: true,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+    repeat: false,
+    isComposing: false,
+  };
+  assert.equal(isSidebarShortcut(event), true);
+  assert.equal(
+    isSidebarShortcut({ ...event, metaKey: false, ctrlKey: true }),
+    true,
+  );
+  for (const change of [
+    { metaKey: false },
+    { key: "n" },
+    { altKey: true },
+    { shiftKey: true },
+    { repeat: true },
+    { isComposing: true },
+  ]) {
+    assert.equal(isSidebarShortcut({ ...event, ...change }), false);
+  }
+});
