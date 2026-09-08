@@ -179,7 +179,8 @@ function App() {
   const [data, setData] = useState<Snapshot>(empty),
     [loaded, setLoaded] = useState(false),
     [live, setLive] = useState(false);
-  const [selected, setSelected] = useState(location.hash.slice(1)),
+  const chatFromUrl = () => location.pathname.startsWith("/chat/") ? location.pathname.slice(6) : "";
+  const [selected, setSelected] = useState(chatFromUrl),
     [project, setProject] = useState("");
   const [messages, setMessages] = useState<Message[]>([]),
     [approvals, setApprovals] = useState<Approval[]>([]);
@@ -348,17 +349,17 @@ function App() {
       };
     }
     connect();
-    const hash = () => {
-      setSelected(location.hash.slice(1));
+    const route = () => {
+      setSelected(chatFromUrl());
       setView("home");
     };
-    window.addEventListener("hashchange", hash);
+    window.addEventListener("popstate", route);
     return () => {
       disposed = true;
       clearTimeout(retry);
       rejectPending();
       socketRef.current?.close();
-      window.removeEventListener("hashchange", hash);
+      window.removeEventListener("popstate", route);
     };
   }, []);
   useEffect(() => {
@@ -417,7 +418,7 @@ function App() {
         e.preventDefault();
         setSelected("");
         setProject("");
-        location.hash = "";
+        history.pushState(null, "", "/");
         setView("home");
         setDraft("");
         setDialog("");
@@ -429,7 +430,7 @@ function App() {
   }, []);
   function open(id: string) {
     setSelected(id);
-    location.hash = id;
+    history.pushState(null, "", id ? `/chat/${id}` : "/");
     setView("home");
     setSidebar(false);
     setDialog("");
@@ -465,7 +466,7 @@ function App() {
         id = created.id;
         setSelected(id);
         selectedRef.current = id;
-        location.hash = id;
+        history.pushState(null, "", `/chat/${id}`);
       }
       await request("message", {
         chat_id: id,
