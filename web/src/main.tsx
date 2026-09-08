@@ -654,13 +654,6 @@ function App() {
       )}
       <div className="composer-foot">
         <span>
-          <Monitor size={12} /> Local workspace{" "}
-          <span className="foot-dot">·</span>{" "}
-          {mode === "agent"
-            ? "Changes stay on this machine"
-            : "Visible in this shared thread"}
-        </span>
-        <span>
           ↵ to send <span className="foot-dot">·</span> ⇧ ↵ for new line
         </span>
       </div>
@@ -860,17 +853,6 @@ function App() {
             </span>
           </div>
           <div className="topbar-actions">
-            <span
-              className={`connection-state ${live ? "online" : ""}`}
-              title={
-                live
-                  ? "Connected to the local PHP server"
-                  : "Reconnecting to the local server"
-              }
-            >
-              <span />
-              {live ? "Local" : "Connecting"}
-            </span>
             {selected && view !== "activity" && (
               <IconButton
                 label="Copy thread link"
@@ -1312,17 +1294,6 @@ function App() {
             </aside>
           )}
         </div>
-        <footer className="statusbar">
-          <span>
-            <span className={`status-dot ${live ? "connected" : ""}`} />
-            {live ? "Workspace connected" : "Connecting to workspace"}
-          </span>
-          <span>
-            <Monitor size={12} /> On this machine{" "}
-            <span className="status-separator">|</span> Crabase{" "}
-            <span className="version">0.1</span>
-          </span>
-        </footer>
       </main>
       {toast && (
         <div className="toast" role="status">
