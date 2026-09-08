@@ -9,6 +9,7 @@ import {
   ChevronDown,
   ChevronRight,
   Folder,
+  FolderOpen,
   SquarePen,
   Settings,
   Monitor,
@@ -756,7 +757,7 @@ function App() {
                     );
                   }}
                 >
-                  <Folder size={16} />
+                  {collapsed.includes(p.id) ? <Folder size={16} /> : <FolderOpen size={16} />}
                   <span>{p.name}</span>
                 </button>
                 <IconButton
@@ -768,22 +769,6 @@ function App() {
                   }}
                 >
                   <Plus size={14} />
-                </IconButton>
-                <IconButton
-                  label={`Toggle ${p.name} threads`}
-                  onClick={() =>
-                    setCollapsed(
-                      collapsed.includes(p.id)
-                        ? collapsed.filter((id) => id !== p.id)
-                        : [...collapsed, p.id],
-                    )
-                  }
-                >
-                  {collapsed.includes(p.id) ? (
-                    <ChevronRight size={13} />
-                  ) : (
-                    <ChevronDown size={13} />
-                  )}
                 </IconButton>
               </div>
               {!collapsed.includes(p.id) && (
