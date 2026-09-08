@@ -964,16 +964,6 @@ function App() {
                   }}
                 >
                   <div className="conversation-inner">
-                    <div className="thread-heading">
-                      <IconButton
-                        label={
-                          chat?.archived ? "Restore thread" : "Archive thread"
-                        }
-                        onClick={() => void archive()}
-                      >
-                        <Archive size={18} />
-                      </IconButton>
-                    </div>
                     <div className="thread-meta">
                       <Users size={14} />
                       <span>
