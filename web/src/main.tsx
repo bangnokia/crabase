@@ -626,17 +626,6 @@ function App() {
                 </IconButton>
               )}
               <button
-                className="agent-send-button"
-                aria-label={`Ask ${agentName}`}
-                title={`Ask ${agentName}`}
-                disabled={
-                  !draft.trim() || busy || !loaded || !live || !chosenModel
-                }
-                onClick={() => void send("agent")}
-              >
-                <Crab size={16} />
-              </button>
-              <button
                 className="send-button"
                 aria-label={"Send team message"}
                 disabled={
