@@ -7,6 +7,10 @@ putenv('CRABASE_DB='.$path);
 function check(bool $ok): void { if (!$ok) throw new RuntimeException('Model selection check failed.'); }
 try {
     S::db();
+    $project = S::all('SELECT id FROM projects LIMIT 1')[0]['id'];
+    check(array_key_exists('branch', A::handle('projectContext', ['project_id'=>$project])));
+    try { A::handle('projectContext', ['project_id'=>'missing']); throw new RuntimeException('Missing project accepted'); }
+    catch (InvalidArgumentException) {}
     $models = [['model'=>'test-model','defaultReasoningEffort'=>'low','supportedReasoningEfforts'=>[['reasoningEffort'=>'low'],['reasoningEffort'=>'high']]]];
     S::run("INSERT INTO settings VALUES ('models',?)", [json_encode($models)]);
     $chat = A::handle('create', ['title'=>'Queue options'])['id'];

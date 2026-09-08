@@ -67,7 +67,7 @@ final class Codex
                 $this->clients[$connection->id] = ['chat_id'=>$chatId,'state'=>$state,'thread'=>$thread];
                 $result = ['state'=>$state,'thread'=>$thread];
             } else {
-                if (!in_array($m['action'], ['project','create','message','archive','cancel','approval'])) throw new \InvalidArgumentException('Unknown action.');
+                if (!in_array($m['action'], ['projectContext','project','create','message','archive','cancel','approval'])) throw new \InvalidArgumentException('Unknown action.');
                 $result = \app\service\Actions::handle($m['action'],$m['data']);
             }
             $this->reply($connection,['id'=>$id,'result'=>$result]);

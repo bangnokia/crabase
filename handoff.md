@@ -10,6 +10,8 @@ Projects are optional existing readable folders on the machine. Standalone chats
 
 ## UI
 
+- New project chats show a compact project bar above the composer. The `projectContext` WebSocket command reads the selected folder’s Git branch on opening; non-Git folders and detached HEADs show only the project name.
+
 - Codex-style desktop layout with responsive mobile layout.
 - Agent messages align left; people messages and notes align right.
 - Agent display name defaults to `Crab`.

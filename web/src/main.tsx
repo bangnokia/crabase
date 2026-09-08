@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Folder,
   FolderOpen,
+  GitBranch,
   SquarePen,
   Settings,
   Monitor,
@@ -254,6 +255,16 @@ function App() {
     currentProject = data.projects.find(
       (p) => p.id === (chat?.project_id || project),
     );
+  const [branch, setBranch] = useState<string | null>(null);
+  useEffect(() => {
+    setBranch(null);
+    if (selected || !currentProject || !live) return;
+    let stale = false;
+    request<{ branch: string | null }>("projectContext", { project_id: currentProject.id })
+      .then((result) => { if (!stale) setBranch(result.branch); })
+      .catch(() => {});
+    return () => { stale = true; };
+  }, [selected, currentProject?.id, live]);
   const active = chat && chat.status !== "idle";
   const agentName = data.agentName || "Crab";
   selectedRef.current = selected;
@@ -525,6 +536,12 @@ function App() {
           </IconButton>
         </div>
       )}
+      {!selected && currentProject && (
+        <div className="composer-project-bar">
+          <span><Folder size={15} />{currentProject.name}</span>
+          {branch && <span><GitBranch size={15} />{branch}</span>}
+        </div>
+      )}
       {chat?.archived ? (
         <div className="archived-notice">
           <Archive size={17} /> This thread is archived.
@@ -550,7 +567,7 @@ function App() {
               }
             }}
             placeholder="Write to the team…"
-            rows={selected ? 2 : 3}
+            rows={2}
             maxLength={20000}
           />
           <div className="composer-controls">

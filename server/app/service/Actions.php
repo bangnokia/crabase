@@ -28,6 +28,16 @@ final class Actions
     }
     public static function handle(string $action, array $data): array
     {
+            if ($action === 'projectContext') {
+                $id = S::text($data['project_id'] ?? null, 64);
+                $project = S::all('SELECT path FROM projects WHERE id=?', [$id])[0] ?? null;
+                if (!$project) throw new InvalidArgumentException('Project not found.');
+                $process = proc_open(['git','-C',$project['path'],'symbolic-ref','--quiet','--short','HEAD'], [0=>['file','/dev/null','r'],1=>['pipe','w'],2=>['file','/dev/null','w']], $pipes);
+                if (!is_resource($process)) return ['branch'=>null];
+                $branch = trim(stream_get_contents($pipes[1]));
+                fclose($pipes[1]);
+                return ['branch'=>proc_close($process) === 0 && $branch !== '' ? $branch : null];
+            }
             if ($action === 'project') {
                 $name = S::text($data['name'] ?? null, 80);
                 $path = realpath(S::text($data['path'] ?? null, 4096));
