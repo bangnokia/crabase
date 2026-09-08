@@ -444,6 +444,7 @@ kbd {
   margin-bottom: 15px;
 }
 .welcome h1 {
+  margin-bottom: 24px;
   font-size: 34px;
   line-height: 1.2;
   letter-spacing: -1.3px;
