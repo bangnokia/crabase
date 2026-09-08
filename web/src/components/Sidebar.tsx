@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 import {
   Folder,
   FolderOpen,
@@ -13,6 +13,7 @@ import type { Avatars, Chat, Project } from "../types";
 import { Avatar, AvatarStack } from "./Avatar";
 import { Crab } from "./Crab";
 import { IconButton } from "./ui";
+import { clampSidebarWidth } from "../lib/layout";
 type Props = {
   projects: Project[];
   chats: Chat[];
@@ -69,6 +70,8 @@ export function Sidebar({
   newChat,
   showDialog,
 }: Props) {
+  const [width, setWidth] = useState(232);
+  const dragOffset = useRef(0);
   const [collapsed, setCollapsed] = useState<string[]>([]);
   const [projectsOpen, setProjectsOpen] = useState(true);
   return (
@@ -83,6 +86,8 @@ export function Sidebar({
       <aside
         className={`sidebar ${visible ? "mobile-open" : ""} ${hidden ? "desktop-hidden" : ""}`}
         aria-label="Workspace sidebar"
+        id="workspace-sidebar"
+        style={{ "--sidebar-width": `${width}px` } as CSSProperties}
       >
         <div className="brand-row">
           <button className="brand" onClick={() => newChat()}>
@@ -203,6 +208,45 @@ export function Sidebar({
             <Settings size={17} />
           </IconButton>
         </div>
+        <div
+          className="sidebar-resize"
+          role="separator"
+          aria-label="Resize sidebar"
+          aria-orientation="vertical"
+          aria-controls="workspace-sidebar"
+          aria-valuemin={200}
+          aria-valuemax={700}
+          aria-valuenow={width}
+          tabIndex={0}
+          onPointerDown={(event) => {
+            if (event.button !== 0) return;
+            event.preventDefault();
+            dragOffset.current = event.clientX - width;
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }}
+          onPointerMove={(event) => {
+            if (event.currentTarget.hasPointerCapture(event.pointerId))
+              setWidth(clampSidebarWidth(event.clientX - dragOffset.current));
+          }}
+          onPointerUp={(event) => {
+            if (event.currentTarget.hasPointerCapture(event.pointerId))
+              event.currentTarget.releasePointerCapture(event.pointerId);
+          }}
+          onKeyDown={(event) => {
+            if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key))
+              return;
+            event.preventDefault();
+            setWidth((value) =>
+              clampSidebarWidth(
+                event.key === "Home"
+                  ? 200
+                  : event.key === "End"
+                    ? 700
+                    : value + (event.key === "ArrowLeft" ? -16 : 16),
+              ),
+            );
+          }}
+        />
       </aside>
     </>
   );

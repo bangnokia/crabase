@@ -54,3 +54,10 @@ test("avatar preferences resolve by author and reject executable URLs", () => {
   assert.equal(validAvatarUrl("javascript:alert(1)"), false);
   assert.equal(validAvatarUrl("https://example.com/photo.jpg"), true);
 });
+
+test("sidebar resizing stays within its 200–700px bounds", async () => {
+  const { clampSidebarWidth } = await import("../src/lib/layout.ts");
+  assert.equal(clampSidebarWidth(150), 200);
+  assert.equal(clampSidebarWidth(450), 450);
+  assert.equal(clampSidebarWidth(900), 700);
+});

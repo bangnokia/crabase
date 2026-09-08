@@ -155,6 +155,7 @@ small {
   overflow: hidden;
 }
 .sidebar {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -162,6 +163,18 @@ small {
   padding: var(--space-3) var(--space-2) 0;
   background: var(--sidebar);
   border-right: 1px solid var(--line);
+}
+.sidebar-resize {
+  position: absolute;
+  inset: 0 -4px 0 auto;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 2;
+}
+.sidebar-resize:hover,
+.sidebar-resize:focus-visible {
+  background: var(--line);
 }
 .sidebar.desktop-hidden {
   display: none;
@@ -934,6 +947,9 @@ legend {
   }
 }
 @media (max-width: 760px) {
+  .sidebar-resize {
+    display: none;
+  }
   .sidebar,
   .sidebar.desktop-hidden {
     display: flex;
