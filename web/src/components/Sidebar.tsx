@@ -215,7 +215,7 @@ export function Sidebar({
           aria-orientation="vertical"
           aria-controls="workspace-sidebar"
           aria-valuemin={200}
-          aria-valuemax={700}
+          aria-valuemax={500}
           aria-valuenow={width}
           tabIndex={0}
           onPointerDown={(event) => {
@@ -241,7 +241,7 @@ export function Sidebar({
                 event.key === "Home"
                   ? 200
                   : event.key === "End"
-                    ? 700
+                    ? 500
                     : value + (event.key === "ArrowLeft" ? -16 : 16),
               ),
             );

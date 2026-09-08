@@ -172,8 +172,11 @@ small {
   touch-action: none;
   z-index: 2;
 }
-.sidebar-resize:hover,
-.sidebar-resize:focus-visible {
+.sidebar-resize:hover::after,
+.sidebar-resize:focus-visible::after {
+  content: "";
+  position: absolute;
+  inset: 0 3px;
   background: var(--line);
 }
 .sidebar.desktop-hidden {
