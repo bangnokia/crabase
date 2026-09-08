@@ -241,7 +241,6 @@ kbd {
 .thread-tree {
   margin: 4px 0 15px 16px;
   padding-left: 7px;
-  border-left: 1px solid var(--line);
 }
 .thread-link {
   display: flex;

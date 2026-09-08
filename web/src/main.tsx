@@ -732,7 +732,7 @@ function App() {
               </button>
             ))}
           <div className="sidebar-section-label">
-            <span>Projects</span>
+            <span onClick={() => setCollapsed(data.projects.map((p) => p.id))}>Projects</span>
             <IconButton
               label="Add project"
               onClick={() => setDialog("project")}
@@ -822,7 +822,6 @@ function App() {
               <span className="avatar">{name === "user2" ? "U2" : "U1"}</span>
               <span>
                 <strong>{name}</strong>
-                <small>Local workspace</small>
               </span>
             </button>
             <IconButton label="Settings" onClick={() => setDialog("settings")}>
