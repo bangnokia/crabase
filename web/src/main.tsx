@@ -800,7 +800,7 @@ function App() {
                         <span
                           className={`thread-status ${c.status === "idle" ? "" : "working"}`}
                         >
-                          {c.status === "idle" ? null : (
+                          {c.status === "idle" ? <Users size={13} /> : (
                             <Loader2 size={13} className="spin" />
                           )}
                         </span>
@@ -966,7 +966,7 @@ function App() {
                                 m.role === "guide" ? (
                                   <Crab size={23} />
                                 ) : (
-                                  avatar
+                                  m.author === "user2" ? "😎" : "🙂"
                                 )}
                               </span>
                               <strong>
