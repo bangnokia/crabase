@@ -1,55 +1,71 @@
-import { Folder, X } from "lucide-react";
-import type { Project, Snapshot } from "../types";
-import { time } from "../lib/format";
+import { Download, File, X } from "lucide-react";
+import type { Artifact } from "../types";
 import { IconButton } from "./ui";
 export function DetailsPanel({
-  project,
-  data,
+  artifacts,
+  chatSelected,
+  loaded,
   close,
-  open,
 }: {
-  project?: Project;
-  data: Snapshot;
+  artifacts: Artifact[];
+  chatSelected: boolean;
+  loaded: boolean;
   close: () => void;
-  open: (id: string) => void;
 }) {
   return (
-    <aside className="details-panel" aria-label="Workspace details">
+    <aside className="details-panel" aria-label="Artifacts">
       <div className="details-heading">
-        <h2>Workspace</h2>
-        <IconButton label="Close workspace details" onClick={close}>
+        <h2>Artifacts</h2>
+        <IconButton label="Close artifacts" onClick={close}>
           <X size={17} />
         </IconButton>
       </div>
-      {project && (
-        <div className="project-detail">
-          <Folder size={20} />
-          <h3>{project.name}</h3>
-          <code>{project.path}</code>
+      {chatSelected && (
+        <div>
+          {!loaded ? (
+            <p className="muted">Loading artifacts…</p>
+          ) : !artifacts.length ? (
+            <p className="muted">No artifacts yet.</p>
+          ) : (
+            <ul className="artifact-list">
+              {artifacts.map((file) => (
+                <li key={file.url}>
+                  {/^image\/(png|jpeg|gif|webp|avif)$/.test(file.mime) ? (
+                    <a
+                      href={file.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={`Preview ${file.name}`}
+                    >
+                      <img src={file.url} alt="" loading="lazy" />
+                    </a>
+                  ) : (
+                    <File size={24} aria-hidden="true" />
+                  )}
+                  <a
+                    href={`${file.url}?download=1`}
+                    className="artifact-download"
+                    title={file.name}
+                  >
+                    <span>
+                      <strong>{file.name.replace(/^[a-f0-9]{12}-/, "")}</strong>
+                      <small>
+                        {file.name.split(".").pop()?.toUpperCase()} ·{" "}
+                        {file.size < 1024
+                          ? `${file.size} B`
+                          : file.size < 1048576
+                            ? `${(file.size / 1024).toFixed(1)} KB`
+                            : `${(file.size / 1048576).toFixed(1)} MB`}
+                      </small>
+                    </span>
+                    <Download size={16} aria-label="Download" />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
-      <div className="detail-state">
-        <span>{data.agentName}</span>
-        <span>{data.runtime}</span>
-      </div>
-      <h3>Recent activity</h3>
-      <div className="activity-list">
-        {data.events.slice(0, 12).map((event) => (
-          <button
-            key={event.id}
-            disabled={!event.chat_id}
-            onClick={() => open(event.chat_id)}
-          >
-            <span>
-              {event.label
-                .replace(/^Codex turn /, `${data.agentName} turn `)
-                .replace(/ asked Codex$/, ` asked ${data.agentName}`)}
-            </span>
-            <time>{time(event.created_at)}</time>
-          </button>
-        ))}
-      </div>
-      {!data.events.length && <p className="muted">No activity yet.</p>}
     </aside>
   );
 }

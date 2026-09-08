@@ -250,11 +250,6 @@ export function Composer({
           <ErrorNotice message={modelError} />
         </div>
       )}
-      {!chat?.archived && (
-        <div className="composer-foot">
-          ↵ to send <span>·</span> ⇧ ↵ for new line
-        </div>
-      )}
     </div>
   );
 }

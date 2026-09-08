@@ -179,7 +179,6 @@ export function App() {
             setSidebarHidden(false);
           }}
           toggleDetails={() => setDetails(!details)}
-          archive={() => void archive()}
           copy={() =>
             void navigator.clipboard
               .writeText(location.href)
@@ -217,14 +216,16 @@ export function App() {
               </ChatPage>
             )}
           </div>
-          {details && (
-            <DetailsPanel
-              {...{ project, data, open }}
-              close={() => setDetails(false)}
-            />
-          )}
         </div>
       </main>
+      {details && (
+        <DetailsPanel
+          artifacts={workspace.artifacts}
+          chatSelected={!!selected}
+          loaded={loaded}
+          close={() => setDetails(false)}
+        />
+      )}
       {toast && (
         <div className="toast" role="status">
           <Check size={16} />

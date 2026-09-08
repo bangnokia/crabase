@@ -1,4 +1,4 @@
-import { Archive, Copy, PanelLeft, PanelRight } from "lucide-react";
+import { Copy, PanelLeft, PanelRight } from "lucide-react";
 import type { Chat, Project } from "../types";
 import { IconButton } from "./ui";
 export function Header({
@@ -8,7 +8,6 @@ export function Header({
   sidebarHidden,
   toggleDetails,
   copy,
-  archive,
 }: {
   chat?: Chat;
   project?: Project;
@@ -16,7 +15,6 @@ export function Header({
   sidebarHidden: boolean;
   toggleDetails: () => void;
   copy: () => void;
-  archive: () => void;
 }) {
   return (
     <header className="topbar">
@@ -40,20 +38,11 @@ export function Header({
       </div>
       <div className="topbar-actions">
         {chat && (
-          <>
-            <IconButton label="Copy chat link" onClick={copy}>
-              <Copy size={16} />
-            </IconButton>
-            <IconButton
-              label={chat.archived ? "Restore chat" : "Archive chat"}
-              disabled={chat.status !== "idle"}
-              onClick={archive}
-            >
-              <Archive size={16} />
-            </IconButton>
-          </>
+          <IconButton label="Copy chat link" onClick={copy}>
+            <Copy size={16} />
+          </IconButton>
         )}
-        <IconButton label="Workspace details" onClick={toggleDetails}>
+        <IconButton label="Artifacts" onClick={toggleDetails}>
           <PanelRight size={18} />
         </IconButton>
       </div>

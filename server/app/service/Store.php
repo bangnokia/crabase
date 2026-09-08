@@ -66,7 +66,7 @@ final class Store
     public static function thread(string $id): array {
         $chat = self::all('SELECT * FROM chats WHERE id=?', [$id])[0] ?? null;
         if (!$chat) throw new InvalidArgumentException('Conversation not found.');
-        return ['chat'=>$chat, 'messages'=>self::all('SELECT * FROM messages WHERE chat_id=? ORDER BY id', [$id]), 'approvals'=>self::all('SELECT * FROM approvals WHERE chat_id=? AND decision IS NULL', [$id])];
+        return ['artifacts'=>Artifacts::listing($id), 'chat'=>$chat, 'messages'=>self::all('SELECT * FROM messages WHERE chat_id=? ORDER BY id', [$id]), 'approvals'=>self::all('SELECT * FROM approvals WHERE chat_id=? AND decision IS NULL', [$id])];
     }
     public static function agentName(): string {
         $config = require dirname(__DIR__,2).'/config/crabase.php';

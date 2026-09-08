@@ -124,7 +124,7 @@ Use 6–8px radii for rows and controls, 16–20px for the composer and dialogs,
 ### Conversation
 
 - Agent messages align left; human messages and notes align right, with readable text and clear authorship.
-- Keep avatar, author, and timestamp as one compact group. Mark notes with a quiet “Note” label.
+- Keep avatar and author as one compact group. Place the timestamp below the message body, aligned right for human messages. Mark notes with a quiet “Note” label.
 - Do not restore the removed chat heading, “Chat · time” row, or bottom status bar.
 - Keep terminal output and file details in disclosures. Make approvals visible and specific enough to support a decision.
 - Streaming must not steal the reader’s scroll position when they scroll upward. Resume following only when they return to the bottom or explicitly request it.
@@ -177,3 +177,15 @@ The design system lives in `web/src/styles/tokens.css`; `web/src/style.css` owns
 The implemented pass removes discarded home-screen content, consolidates both avatar surfaces, adds accessible project toggles, keeps archive recovery available, and establishes the tokens above. Avatar preferences remain browser-local. Project selection still uses the existing folder-path form; a browsable folder picker is separate feature work.
 
 A change is successful when the app becomes easier to use and more consistent, not merely more decorated.
+
+### Generated deliverables
+
+Published raster image links show an inline preview and a download action. Other deliverables show their linked label with a download icon. Use `/files/<chat-id>/<filename>` URLs returned by the publisher; never present absolute filesystem paths as working browser links. HTML and SVG download rather than execute within the application.
+
+The right sidebar exposes a collapsible Files section for the selected chat, with compact filename/type/size rows, raster thumbnails, and download links. Distinguish loading from an empty list and clear the list when switching chats.
+
+The top bar is 48px tall and has no archive action. Omit the composer keyboard-hint footer; Enter/Shift+Enter behavior remains unchanged.
+
+The right sidebar stays in the shell flex layout at every viewport size, taking up to 280px (40vw on narrow screens). Opening it reduces the chat width; it never overlays the conversation.
+
+The right sidebar has a single “Artifacts” heading and the current chat’s file list. Omit workspace/project paths, agent runtime, activity, and duplicate section headings.

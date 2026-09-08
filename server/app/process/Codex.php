@@ -101,11 +101,12 @@ final class Codex
                         $patch['append'][] = ['id'=>$message['id'],'delta'=>substr($message['body'],strlen($before['body']))];
                     } else $patch['messages'][] = $message;
                 }
+                if ($thread['artifacts'] !== $client['thread']['artifacts']) $patch['artifacts'] = $thread['artifacts'];
                 if ($thread['approvals'] !== $client['thread']['approvals']) $patch['approvals'] = $thread['approvals'];
                 $patch['chat_id'] = $chatId;
                 $client['thread'] = $thread;
             }
-            if (isset($patch['state']) || isset($patch['messages']) || isset($patch['append']) || isset($patch['approvals'])) {
+            if (isset($patch['state']) || isset($patch['messages']) || isset($patch['append']) || isset($patch['approvals']) || isset($patch['artifacts'])) {
                 if (isset($this->worker->connections[$id])) $this->reply($this->worker->connections[$id],$patch);
             }
         }
@@ -192,7 +193,12 @@ final class Codex
                 $next['path'] = dirname(__DIR__,2).'/runtime/chats/'.$next['chat_id'];
                 if (!is_dir($next['path']) && !mkdir($next['path'],0700,true)) throw new \RuntimeException('Could not create chat directory.');
             }
-            $params = ['cwd'=>$next['path'],'approvalPolicy'=>'on-request','sandbox'=>'workspace-write'];
+            $outputDirectory = \app\service\Artifacts::directory($next['chat_id']);
+            $publisher = dirname(__DIR__,2).'/bin/publish-artifact.php';
+            $publishCommand = 'php '.escapeshellarg($publisher).' '.escapeshellarg($next['chat_id']);
+            $params = ['cwd'=>$next['path'],'approvalPolicy'=>'never','sandbox'=>'danger-full-access',
+                'developerInstructions'=>"Save user-facing deliverables in $outputDirectory. To publish any finished file, run $publishCommand ABSOLUTE_FILE_PATH (shell-quote the file path). This command copies the file into persistent artifact storage and returns JSON with its actual url. Always publish deliverables with this command and share the returned url verbatim using Markdown links, or image Markdown for raster images. If a skill saves elsewhere, publish that file with the same command. Do not invent download URLs or share filesystem paths. Keep normal project source edits in the project folder. Publish only requested deliverables, never secrets or credentials."];
+
             if ($next['thread_id']) $params['threadId'] = $next['thread_id'];
             $this->rpc($next['thread_id'] ? 'thread/resume' : 'thread/start', $params, function ($result) {
                 $thread = $result['thread']['id']; $this->job['thread_id'] = $thread;

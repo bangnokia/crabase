@@ -44,6 +44,7 @@ final class Actions
                 if (!$path || !is_dir($path) || !is_readable($path)) throw new InvalidArgumentException('Choose an existing, readable directory on this machine.');
                 $root = realpath((require dirname(__DIR__,2).'/config/crabase.php')['workspace_root']);
                 if (!$root || ($path !== $root && !str_starts_with($path, $root . DIRECTORY_SEPARATOR))) throw new InvalidArgumentException('Choose a folder inside the configured workspace root.');
+                if ($path === $root.'/.artifacts' || str_starts_with($path, $root.'/.artifacts/')) throw new InvalidArgumentException('Artifact storage cannot be a project.');
                 $id = bin2hex(random_bytes(8));
                 if (S::all('SELECT id FROM projects WHERE path=?', [$path])) throw new InvalidArgumentException('This directory is already a project.');
                 S::run('INSERT INTO projects VALUES (?,?,?)', [$id,$name,$path]);

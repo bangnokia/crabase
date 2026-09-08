@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Snapshot, Message, Approval } from "../types";
+import type { Snapshot, Message, Approval, Artifact } from "../types";
 import { applyMessagePatch } from "../lib/messages";
 const empty: Snapshot = {
   agentName: "Crab",
@@ -14,6 +14,7 @@ export function useWorkspace(selected: string) {
   const [loaded, setLoaded] = useState(false);
   const [live, setLive] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [error, setError] = useState("");
   const selectedRef = useRef(selected);
@@ -106,6 +107,7 @@ export function useWorkspace(selected: string) {
             setMessages((previous) =>
               applyMessagePatch(previous, packet.messages, packet.append),
             );
+          if (packet.artifacts) setArtifacts(packet.artifacts);
           if (packet.approvals) setApprovals(packet.approvals);
         }
       };
@@ -127,18 +129,24 @@ export function useWorkspace(selected: string) {
   useEffect(() => {
     setMessages([]);
     setApprovals([]);
+    setArtifacts([]);
     setLoaded(false);
     if (!live) return;
     const id = selected;
     let stale = false;
     request<{
       state: Snapshot;
-      thread: { messages: Message[]; approvals: Approval[] } | null;
+      thread: {
+        artifacts: Artifact[];
+        messages: Message[];
+        approvals: Approval[];
+      } | null;
     }>("sync", { chat_id: id || null })
       .then((result) => {
         if (stale) return;
         setData(result.state);
         setLoaded(true);
+        setArtifacts(result.thread?.artifacts || []);
         setMessages(result.thread?.messages || []);
         setApprovals(result.thread?.approvals || []);
       })
@@ -150,5 +158,15 @@ export function useWorkspace(selected: string) {
     };
   }, [selected, live, request]);
 
-  return { data, loaded, live, messages, approvals, error, setError, request };
+  return {
+    data,
+    loaded,
+    live,
+    messages,
+    approvals,
+    artifacts,
+    error,
+    setError,
+    request,
+  };
 }

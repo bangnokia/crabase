@@ -83,6 +83,10 @@ Current tests pass:
 
 A real browser check has also completed a model-selected Codex request through PHP and verified the streamed response.
 
+## Agent permissions
+
+Crabase explicitly starts and resumes Codex threads with `approvalPolicy=never` and `sandbox=danger-full-access` in `server/app/process/Codex.php`. This is scoped to Crabase; the global Codex config is unchanged. Organization policies and tool-specific confirmation requirements can still apply.
+
 ## Important boundaries
 
 This is a local foundation, not a network-ready team deployment. There is no real authentication, membership/authorization, or secure remote exposure. Dummy users are labels only. One Codex turn runs at a time to avoid concurrent edits. Separate Git worktrees and parallel agent workers are not implemented. Advanced interactive app-server requests are not supported yet.
@@ -98,3 +102,13 @@ Do not expose the loopback listeners publicly until authentication, authorizatio
 5. Add a production reverse proxy and deployment configuration only after the security boundary is designed.
 
 Keep changes small, reuse the existing WebSocket path, and update this handoff when behavior or commands change.
+
+## Published artifacts
+
+User-facing output files live at `<CRABASE_WORKSPACE_ROOT>/.artifacts/<chat-id>/`; this is persistent storage, not disposable cache. Back it up with SQLite. The reserved directory cannot be added as a project. There is currently a path-entry project form, not a folder browser.
+
+Every Codex start/resume receives the chat output directory and an instruction to invoke `php server/bin/publish-artifact.php CHAT_ID ABSOLUTE_FILE_PATH` (using the absolute script path). This shell-invoked publisher works with existing sessions: it copies a finished deliverable, assigns a unique filename without overwriting previous outputs, and returns JSON containing a relative `/files/<chat-id>/<filename>` URL. Skills can keep their existing output locations. Source edits stay in project folders. This is not a registered dynamic/MCP tool.
+
+The PHP GET file route serves only canonical files inside that chat's artifact directory, rejects traversal and symlink escapes, and streams raster images inline or other types as attachments. `?download=1` forces download. HTML/SVG are attachments with sandbox/nosniff headers. Vite proxies `/files`. Conversation Markdown renders published image links as previews with download links; image Markdown also works. No workspace HTTP polling is introduced. Old absolute filesystem links are not automatically published or exposed. Authentication remains local-only/shared, with no per-user artifact permissions.
+
+The right details sidebar includes a collapsible current-chat Files section (name/type/size, raster thumbnails, download). `sync.thread.artifacts` and `patch.artifacts` carry the filesystem listing; the publisher bumps the existing revision after a successful copy so subscribers update without polling. Reconnect rescans storage. Manual filesystem edits are picked up on the next workspace revision or sync; there is no filesystem watcher. Files are never stored in a separate artifact table.

@@ -45,3 +45,10 @@ export type Request = <T = unknown>(
   data?: unknown,
 ) => Promise<T>;
 export type Avatars = Record<string, string>;
+
+export type Artifact = {
+  name: string;
+  url: string;
+  mime: string;
+  size: number;
+};

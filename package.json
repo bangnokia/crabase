@@ -7,7 +7,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "test": "node --experimental-strip-types --test web/tests/*.test.mjs && php server/tests/models.php && python3 server/tests/smoke.py"
+    "test": "node --experimental-strip-types --test web/tests/*.test.mjs && php server/tests/models.php && php server/tests/artifacts.php && python3 server/tests/smoke.py"
   },
   "dependencies": {
     "@fontsource-variable/dm-sans": "^5.3.0",

@@ -348,7 +348,7 @@ small {
   flex-direction: column;
 }
 .topbar {
-  height: 60px;
+  height: 48px;
   padding: 0 var(--space-5);
   flex-shrink: 0;
   display: flex;
@@ -525,14 +525,6 @@ small {
 .composer-project-bar button {
   text-decoration: underline;
 }
-.composer-foot {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-1) 0;
-  font-size: var(--type-meta);
-  color: var(--muted);
-}
 .in-chat {
   width: 100%;
   max-width: calc(var(--content-width) + 48px);
@@ -593,8 +585,13 @@ small {
 .message-author strong {
   font-weight: var(--weight-medium);
 }
-.message-author time {
-  margin-left: var(--space-1);
+.message-time {
+  display: block;
+  margin: var(--space-1) 0 0 38px;
+}
+.human .message-time {
+  margin-left: 0;
+  text-align: right;
 }
 .agent-avatar {
   display: inline-flex;
@@ -648,6 +645,22 @@ small {
   padding-left: var(--space-4);
   border-left: 2px solid var(--line);
   color: var(--subtle);
+}
+.artifact-link {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 100%;
+}
+.artifact-link > a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.artifact-link img {
+  max-height: 480px;
+  object-fit: contain;
+  object-position: left;
 }
 .message-body img {
   max-width: 100%;
@@ -735,12 +748,12 @@ small {
 
 /* Details and dialogs */
 .details-panel {
-  width: 280px;
+  width: min(280px, 40vw);
   flex-shrink: 0;
   overflow-y: auto;
   border-left: 1px solid var(--line);
-  padding: var(--space-5);
-  background: var(--surface);
+  padding: var(--space-3) var(--space-2);
+  background: var(--sidebar);
 }
 .details-heading {
   display: flex;
@@ -750,34 +763,6 @@ small {
 }
 .details-heading h2 {
   font-size: var(--type-control);
-}
-.project-detail {
-  margin-bottom: var(--space-5);
-}
-.project-detail code {
-  display: block;
-  font-size: var(--type-meta);
-  color: var(--muted);
-  overflow-wrap: anywhere;
-}
-.detail-state {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: var(--space-6);
-  font-size: var(--type-label);
-}
-.activity-list button {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  text-align: left;
-  padding: var(--space-3) 0;
-  font-size: var(--type-label);
-  border-bottom: 1px solid var(--line);
-}
-.activity-list button:disabled {
-  opacity: 1;
-  cursor: default;
 }
 dialog {
   width: min(480px, calc(100vw - 32px));
@@ -939,16 +924,6 @@ legend {
   display: none;
 }
 
-@media (max-width: 1100px) {
-  .details-panel {
-    position: absolute;
-    right: 0;
-    top: 0;
-    bottom: 0;
-    z-index: 10;
-    box-shadow: var(--shadow-dialog);
-  }
-}
 @media (max-width: 760px) {
   .sidebar-resize {
     display: none;
@@ -979,7 +954,7 @@ legend {
   }
   .topbar {
     padding: 0 var(--space-3);
-    height: 56px;
+    height: 48px;
   }
   .home-page {
     padding: var(--space-6) var(--space-3);
@@ -1006,7 +981,8 @@ legend {
   .human {
     max-width: 100%;
   }
-  .message-body {
+  .message-body,
+  .message-time {
     margin-left: 0;
   }
   .icon-button {
@@ -1041,4 +1017,53 @@ legend {
   *::after {
     scroll-behavior: auto !important;
   }
+}
+
+.artifact-list {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-3) 0 0;
+}
+.artifact-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+}
+.artifact-list img {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: var(--radius-small);
+}
+.artifact-list svg {
+  flex-shrink: 0;
+}
+.artifact-download {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  text-decoration: none;
+}
+.artifact-download > span {
+  flex: 1;
+  min-width: 0;
+}
+.artifact-download strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--type-label);
+  font-weight: 500;
+}
+.artifact-download small {
+  color: var(--muted);
+  font-size: var(--type-meta);
+}
+.artifact-download:hover strong {
+  text-decoration: underline;
 }

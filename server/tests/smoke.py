@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Real WebSocket commands, two subscribers, simulated Codex delta, reconnect. No model calls."""
-import base64, json, os, socket, struct, subprocess, uuid
+import base64, json, os, socket, struct, subprocess, uuid, tempfile
 from pathlib import Path
 
 class Client:
@@ -81,6 +81,20 @@ if __name__=='__main__':
         second.call('message',{'chat_id':chat,'body':'Reply from second test user','mode':'note','author':'user2'})
         both=first.call('sync',{'chat_id':chat})['thread']['messages']
         assert [m['author'] for m in both]==['user1','user2']
+        # Publishing pushes the file list to subscribers and survives reconnect/sync.
+        with tempfile.TemporaryDirectory() as temp:
+            source=Path(temp)/'report.csv'; source.write_text('name,value\ntest,1\n')
+            server=Path(__file__).resolve().parents[1]
+            published=json.loads(subprocess.check_output(['php','bin/publish-artifact.php',chat,str(source)],cwd=server))
+            artifact_root=Path(subprocess.check_output(['php','-r',"require 'vendor/autoload.php'; echo app\\service\\Artifacts::root();"],cwd=server).decode())
+            try:
+                files=second.patch('artifacts')['artifacts']
+                assert len(files)==1 and files[0]['url']==published['url']
+                assert files[0]['size']==source.stat().st_size
+                assert first.call('sync',{'chat_id':chat})['thread']['artifacts']==files
+            finally:
+                (artifact_root/chat/published['name']).unlink()
+                (artifact_root/chat).rmdir()
         first.call('archive',{'chat_id':chat,'archived':True})
         first.call('message',{'chat_id':chat,'body':'must not save','mode':'note'},error=True)
         first.call('archive',{'chat_id':chat,'archived':False})

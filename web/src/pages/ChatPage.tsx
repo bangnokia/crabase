@@ -1,7 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { ChevronDown, Loader2, Terminal } from "lucide-react";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { MessageContent } from "../components/MessageContent";
 import type { Approval, Avatars, Chat, Message } from "../types";
 import { Avatar } from "../components/Avatar";
 import { Crab } from "../components/Crab";
@@ -45,15 +44,17 @@ function MessageItem({
         {message.role === "guide" && (
           <span className="message-tag">Getting started</span>
         )}
-        <time dateTime={message.created_at}>{time(message.created_at)}</time>
       </div>
       <div className="message-body">
-        <Markdown remarkPlugins={[remarkGfm]}>
+        <MessageContent>
           {(message.role === "guide"
             ? message.body.replaceAll("Codex", agentName)
             : message.body) || "…"}
-        </Markdown>
+        </MessageContent>
       </div>
+      <time className="message-time" dateTime={message.created_at}>
+        {time(message.created_at)}
+      </time>
     </article>
   );
 }

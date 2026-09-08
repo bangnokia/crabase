@@ -34,7 +34,7 @@ The three starter conversations are clearly identified as getting-started conten
 
 This is a **local foundation**, not a production team deployment. Both PHP listeners bind to loopback and WebSocket origins are restricted to the local preview. All local browsers share one workspace. The display name is not authentication. Add team authentication, project membership/authorization, and a secure deployment configuration before exposing the app to other users.
 
-One Codex turn runs at a time across this instance to avoid concurrent agent edits. All chats in a project currently use its existing working directory; separate Git worktrees and isolated workers are not implemented yet. Direct edits by someone on the machine can still conflict with an agent's edits. Codex runs with `workspace-write` and `on-request` approvals using the local account's credentials. Unsupported interactive server requests receive an explicit error; forms and other advanced desktop integrations are not implemented.
+One Codex turn runs at a time across this instance to avoid concurrent agent edits. All chats in a project currently use its existing working directory; separate Git worktrees and isolated workers are not implemented yet. Direct edits by someone on the machine can still conflict with an agent's edits. Codex runs with `danger-full-access` and `never` approvals using the local account's credentials. Unsupported interactive server requests receive an explicit error; forms and other advanced desktop integrations are not implemented.
 
 Conversation display data lives in `server/runtime/crabase.sqlite`; agent context lives in Codex's own thread storage. Back up both to preserve the full workspace. App archiving hides the chat locally and does not archive the upstream Codex thread. Interrupted server runs are marked failed on restart and can be resumed by sending another message.
 
@@ -92,3 +92,7 @@ CRABASE_AGENT_NAME="Your agent name" php server/start.php start
 ```
 
 Restart the running backend after configuration changes. This names the agent in the UI, including historical assistant-message headers, composer, approval prompts, and new activity. Codex remains the underlying runtime; model names and message content are not renamed.
+
+### Generated files
+
+Deliverables are stored persistently under the configured `CRABASE_WORKSPACE_ROOT` in `.artifacts/<chat-id>/`. The agent receives a publish command that copies a finished file and returns its browser URL. Images can preview in chat; all file types can download through the local PHP server. Existing raw filesystem links must be republished. Back up `.artifacts` alongside the database; do not treat it as a temporary directory.
