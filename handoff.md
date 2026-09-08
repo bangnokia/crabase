@@ -58,7 +58,7 @@ If PHP cannot find Codex, set `CODEX_BIN` to the absolute executable path. Run `
 
 ## Frontend maintenance
 
-Read `design.md` before changing UI. Shared components use explicit typed props; the app owns mutations and the WebSocket hook owns transport. No router, state-management, or UI-kit dependency was added. Hidden recent-chat/suggestion/about/activity-page code and its styles were removed. Archive/restore remains available through the header and sidebar archive list.
+Read `design.md` before changing UI. Shared components use explicit typed props; the app owns mutations and the WebSocket hook owns transport. No router, state-management, or UI-kit dependency was added. Hidden recent-chat/suggestion/about/activity-page code and its styles were removed. Archive/restore remains available through the header; archived chats remain discoverable through search.
 
 Snapshot `chats[].participants` is now a JSON array of distinct human message/note authors. Guide/agent authors and invented default users are excluded. Avatar image URLs are keyed by author in localStorage and synchronized across tabs of the same browser; they are not server-side user profiles or account authentication.
 

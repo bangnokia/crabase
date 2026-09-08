@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  Archive,
   Folder,
   FolderOpen,
   Loader2,
@@ -72,8 +71,6 @@ export function Sidebar({
 }: Props) {
   const [collapsed, setCollapsed] = useState<string[]>([]);
   const [projectsOpen, setProjectsOpen] = useState(true);
-  const [archivesOpen, setArchivesOpen] = useState(false);
-  const archived = chats.filter((chat) => chat.archived);
   return (
     <>
       {visible && (
@@ -192,25 +189,6 @@ export function Sidebar({
                 );
               })}
             </div>
-          )}
-          {archived.length > 0 && (
-            <>
-              <button
-                className="section-label archive-toggle"
-                aria-expanded={archivesOpen}
-                onClick={() => setArchivesOpen(!archivesOpen)}
-              >
-                <Archive size={14} />
-                Archived<span>{archived.length}</span>
-              </button>
-              {archivesOpen &&
-                archived.map((chat) => (
-                  <ChatLink
-                    key={chat.id}
-                    {...{ chat, selected, avatars, open }}
-                  />
-                ))}
-            </>
           )}
         </div>
         <div className="profile-row">
