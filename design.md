@@ -112,7 +112,7 @@ Use 6–8px radii for rows and controls, 16–20px for the composer and dialogs,
 
 - The send arrow is the single primary action. Enter sends to the agent; Shift+Enter inserts a line break. Preserve IME composition behavior.
 - A secondary note icon beside send saves a note without invoking the agent. No duplicate Crab send button or separate mode trigger.
-- Show Stop only while work can be cancelled. Keep button positions stable when possible.
+- While work can be cancelled, Stop replaces the send arrow in the same primary-action position. Never show Stop and Send together. Enter still sends another agent message while work is active, allowing sequential queued messages; the Stop button cancels active and queued requests.
 - Keep model and reasoning selectors compact, readable, and keyboard accessible. Use real backend model capabilities.
 - Preserve drafts on failure. Explain errors near the composer with a useful recovery action.
 - For a new project chat, show a shallow, quiet bar immediately above the input with the project name and current Git branch when available. Standalone chats have no project bar.

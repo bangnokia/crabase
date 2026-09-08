@@ -222,26 +222,29 @@ export function Composer({
               >
                 <StickyNote size={18} />
               </IconButton>
-              {chat && chat.status !== "idle" && (
+              {chat && chat.status !== "idle" ? (
                 <IconButton
+                  className="send-button"
                   label="Stop agent and queued requests"
+                  disabled={!live}
                   onClick={cancel}
                 >
                   <Square size={16} />
                 </IconButton>
+              ) : (
+                <IconButton
+                  className="send-button"
+                  label={`Send to ${data.agentName}`}
+                  disabled={disabled || !chosen}
+                  onClick={() => submit("agent")}
+                >
+                  {busy ? (
+                    <Loader2 size={18} className="spin" />
+                  ) : (
+                    <ArrowUp size={19} />
+                  )}
+                </IconButton>
               )}
-              <IconButton
-                className="send-button"
-                label={`Send to ${data.agentName}`}
-                disabled={disabled || !chosen}
-                onClick={() => submit("agent")}
-              >
-                {busy ? (
-                  <Loader2 size={18} className="spin" />
-                ) : (
-                  <ArrowUp size={19} />
-                )}
-              </IconButton>
             </div>
           </div>
           <ErrorNotice message={modelError} />
