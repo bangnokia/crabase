@@ -97,6 +97,15 @@ export function ChatPage({
     if (follow.current && scroll.current)
       scroll.current.scrollTop = scroll.current.scrollHeight;
   }, [messages, approvals, chat?.status]);
+  useEffect(() => {
+    const element = scroll.current;
+    if (!element) return;
+    const observer = new ResizeObserver(() => {
+      if (follow.current) element.scrollTop = element.scrollHeight;
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
   return (
     <>
       <h1 className="sr-only">{chat?.title || "Chat"}</h1>

@@ -1,6 +1,6 @@
 # Crabase
 
-A Codex-style shared coding workspace, built with React, PHP Webman/Workerman, and SQLite. The PHP worker talks directly to `codex app-server` over JSONL stdin/stdout. Node is used for frontend development, builds, and checks.
+A Codex-style shared coding workspace, built with React, PHP Webman/Workerman, and SQLite. The PHP worker talks directly to `codex app-server` over JSONL stdin/stdout. Node also runs the local PTY host used by the integrated terminal.
 
 ## Run
 

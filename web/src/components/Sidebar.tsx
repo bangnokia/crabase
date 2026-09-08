@@ -111,13 +111,12 @@ export function Sidebar({
   const { collapsed, projectsOpen, toggleProjects, toggleProject } = useProjectExpansion();
   return (
     <>
-      {visible && (
-        <button
-          className="sidebar-scrim"
-          aria-label="Close sidebar"
-          onClick={close}
-        />
-      )}
+      <button
+        className={`sidebar-scrim ${visible ? "show" : ""}`}
+        aria-label="Close sidebar"
+        tabIndex={visible ? 0 : -1}
+        onClick={close}
+      />
       <aside
         className={`sidebar ${visible ? "mobile-open" : ""} ${hidden ? "desktop-hidden" : ""}`}
         aria-label="Workspace sidebar"

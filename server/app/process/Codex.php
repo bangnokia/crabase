@@ -24,6 +24,12 @@ final class Codex
     private array $clients = [];
     private ?Worker $worker = null;
     private bool $bootAttempted = false;
+    private mixed $terminalProcess = null;
+    private array $terminalPipes = [];
+    private string $terminalInput = '';
+    private string $terminalOutput = '';
+    private array $terminals = [];
+    private int $terminalSequence = 0;
 
     public function onWorkerStart(Worker $worker): void
     {
@@ -94,7 +100,9 @@ final class Codex
                 $thread = $chatId ? Store::thread($chatId) : null;
                 $state = Store::snapshot();
                 $this->clients[$connection->id] = ['chat_id' => $chatId,'state' => $state,'thread' => $thread];
-                $result = ['state' => $state,'thread' => $thread];
+                $result = ['state' => $state,'thread' => $thread,'terminals' => $this->terminalList($chatId)];
+            } elseif (str_starts_with($m['action'], 'terminal')) {
+                $result = $this->terminalAction($connection, $m['action'], $m['data']);
             } else {
                 if (!in_array($m['action'], ['projectFolders','userAvatar','projectContext','project','create','message','archive','cancel','approval'])) {
                     throw new \InvalidArgumentException('Unknown action.');
@@ -215,6 +223,11 @@ final class Codex
     }
     private function tick(): void
     {
+        try {
+            $this->terminalTick();
+        } catch (\Throwable $error) {
+            $this->terminalFailed($error->getMessage());
+        }
         try {
             if (!$this->bootAttempted && $this->clients && microtime(true) >= $this->retryAt) {
                 $this->boot();
@@ -540,6 +553,168 @@ final class Codex
             $this->finish($jobId, 'interrupted', 'The workspace server stopped. Send a new message to resume.');
         }
         $this->shutdown();
+        $this->terminalShutdown();
         $this->status('offline');
+    }
+
+    private function terminalAction(TcpConnection $connection, string $action, array $data): array
+    {
+        $chatId = $this->clients[$connection->id]['chat_id'];
+        if (!$chatId) {
+            throw new \InvalidArgumentException('Open a chat before using the terminal.');
+        }
+        if ($action === 'terminalOpen') {
+            $open = count(array_filter($this->terminals, fn ($terminal) => $terminal['chat_id'] === $chatId));
+            if ($open >= 8) {
+                throw new \InvalidArgumentException('Close a terminal before opening another.');
+            }
+            $row = Store::all('SELECT p.path FROM chats c LEFT JOIN projects p ON p.id=c.project_id WHERE c.id=?', [$chatId])[0] ?? null;
+            if (!$row) {
+                throw new \InvalidArgumentException('Conversation not found.');
+            }
+            $cwd = $row['path'] ?: dirname(__DIR__, 2).'/runtime/chats/'.$chatId;
+            if (!$row['path'] && !is_dir($cwd) && !mkdir($cwd, 0700, true)) {
+                throw new \RuntimeException('Could not create the chat directory.');
+            }
+            $cwd = realpath($cwd);
+            if (!$cwd || !is_dir($cwd) || !is_readable($cwd)) {
+                throw new \InvalidArgumentException('The project folder is unavailable.');
+            }
+            [$cols, $rows] = $this->terminalSize($data);
+            $id = bin2hex(random_bytes(8));
+            $this->terminals[$id] = ['id' => $id,'chat_id' => $chatId,'title' => 'Terminal '.(++$this->terminalSequence),'output' => '','running' => true];
+            try {
+                $this->terminalSend(['action' => 'open','id' => $id,'cwd' => $cwd,'cols' => $cols,'rows' => $rows]);
+            } catch (\Throwable $error) {
+                unset($this->terminals[$id]);
+                throw $error;
+            }
+            $this->terminalBroadcast($chatId, ['event' => 'opened','terminal' => $this->terminals[$id]]);
+            return ['terminal' => $this->terminals[$id]];
+        }
+        $id = Store::text($data['terminal_id'] ?? null, 64);
+        $terminal = $this->terminals[$id] ?? null;
+        if (!$terminal || $terminal['chat_id'] !== $chatId) {
+            throw new \InvalidArgumentException('Terminal not found.');
+        }
+        if (!$terminal['running'] && $action !== 'terminalClose') {
+            throw new \InvalidArgumentException('This terminal has exited.');
+        }
+        if ($action === 'terminalInput') {
+            $input = $data['input'] ?? null;
+            if (!is_string($input) || $input === '' || strlen($input) > 16384) {
+                throw new \InvalidArgumentException('Terminal input must be between 1 and 16384 bytes.');
+            }
+            $this->terminalSend(['action' => 'input','id' => $id,'data' => $input]);
+        } elseif ($action === 'terminalResize') {
+            [$cols, $rows] = $this->terminalSize($data);
+            $this->terminalSend(['action' => 'resize','id' => $id,'cols' => $cols,'rows' => $rows]);
+        } elseif ($action === 'terminalClose') {
+            $this->terminalSend(['action' => 'close','id' => $id]);
+            unset($this->terminals[$id]);
+            $this->terminalBroadcast($chatId, ['event' => 'closed','terminal_id' => $id]);
+        } else {
+            throw new \InvalidArgumentException('Unknown terminal action.');
+        }
+        return ['ok' => true];
+    }
+
+    private function terminalSize(array $data): array
+    {
+        $cols = $data['cols'] ?? 80;
+        $rows = $data['rows'] ?? 24;
+        if (!is_int($cols) || !is_int($rows) || $cols < 20 || $cols > 500 || $rows < 2 || $rows > 200) {
+            throw new \InvalidArgumentException('Invalid terminal size.');
+        }
+        return [$cols, $rows];
+    }
+
+    private function terminalList(?string $chatId): array
+    {
+        return array_values(array_filter($this->terminals, fn ($terminal) => $terminal['chat_id'] === $chatId));
+    }
+
+    private function terminalSend(array $message): void
+    {
+        if (!$this->terminalProcess) {
+            $root = dirname(__DIR__, 3);
+            $this->terminalProcess = proc_open([getenv('NODE_BIN') ?: 'node',$root.'/server/bin/terminal-host.mjs'], [0 => ['pipe','r'],1 => ['pipe','w'],2 => ['pipe','w']], $this->terminalPipes, $root);
+            if (!is_resource($this->terminalProcess)) {
+                $this->terminalProcess = null;
+                throw new \RuntimeException('Could not start the terminal host.');
+            }
+            foreach ($this->terminalPipes as $pipe) stream_set_blocking($pipe, false);
+        }
+        $this->terminalOutput .= json_encode($message, JSON_INVALID_UTF8_SUBSTITUTE)."\n";
+    }
+
+    private function terminalTick(): void
+    {
+        if (!is_resource($this->terminalProcess)) return;
+        if (!proc_get_status($this->terminalProcess)['running']) {
+            throw new \RuntimeException('Terminal host stopped.');
+        }
+        if ($this->terminalOutput !== '') {
+            $written = fwrite($this->terminalPipes[0], $this->terminalOutput);
+            if ($written === false) throw new \RuntimeException('Terminal host connection closed.');
+            $this->terminalOutput = substr($this->terminalOutput, $written);
+        }
+        $stderr = stream_get_contents($this->terminalPipes[2]);
+        if ($stderr) file_put_contents(dirname(__DIR__, 2).'/runtime/logs/terminal.log', $stderr, FILE_APPEND);
+        $this->terminalInput .= stream_get_contents($this->terminalPipes[1]);
+        while (($end = strpos($this->terminalInput, "\n")) !== false) {
+            $line = substr($this->terminalInput, 0, $end);
+            $this->terminalInput = substr($this->terminalInput, $end + 1);
+            $message = json_decode($line, true);
+            $id = $message['id'] ?? null;
+            if (!is_array($message) || !$id || !isset($this->terminals[$id])) continue;
+            $chatId = $this->terminals[$id]['chat_id'];
+            if ($message['event'] === 'output' && is_string($message['data'] ?? null)) {
+                $this->terminals[$id]['output'] .= $message['data'];
+                if (strlen($this->terminals[$id]['output']) > 1000000) {
+                    $this->terminals[$id]['output'] = substr($this->terminals[$id]['output'], -1000000);
+                }
+                $this->terminalBroadcast($chatId, ['event' => 'output','terminal_id' => $id,'data' => $message['data']]);
+            } elseif ($message['event'] === 'exit') {
+                unset($this->terminals[$id]);
+                $this->terminalBroadcast($chatId, ['event' => 'closed','terminal_id' => $id]);
+            } elseif ($message['event'] === 'error') {
+                $this->terminals[$id]['running'] = false;
+                $this->terminalBroadcast($chatId, ['event' => 'error','terminal_id' => $id,'message' => $message['message'] ?? 'Terminal failed.']);
+            }
+        }
+    }
+
+    private function terminalBroadcast(string $chatId, array $packet): void
+    {
+        $packet += ['type' => 'terminal','chat_id' => $chatId];
+        foreach ($this->clients as $id => $client) {
+            if ($client['chat_id'] === $chatId && isset($this->worker->connections[$id])) {
+                $this->reply($this->worker->connections[$id], $packet);
+            }
+        }
+    }
+
+    private function terminalFailed(string $message): void
+    {
+        foreach ($this->terminals as &$terminal) {
+            $terminal['running'] = false;
+            $this->terminalBroadcast($terminal['chat_id'], ['event' => 'error','terminal_id' => $terminal['id'],'message' => $message]);
+        }
+        unset($terminal);
+        $this->terminalShutdown();
+    }
+
+    private function terminalShutdown(): void
+    {
+        foreach ($this->terminalPipes as $pipe) if (is_resource($pipe)) fclose($pipe);
+        if (is_resource($this->terminalProcess)) {
+            proc_terminate($this->terminalProcess);
+            proc_close($this->terminalProcess);
+        }
+        $this->terminalProcess = null;
+        $this->terminalPipes = [];
+        $this->terminalInput = '';
+        $this->terminalOutput = '';
     }
 }

@@ -64,3 +64,11 @@ export type Artifact = {
   mime: string;
   size: number;
 };
+
+export type TerminalSession = {
+  id: string;
+  chat_id: string;
+  title: string;
+  output: string;
+  running: boolean;
+};

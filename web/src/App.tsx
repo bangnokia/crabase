@@ -9,6 +9,7 @@ import { chatPath } from "./lib/routes";
 import { Sidebar } from "./components/Sidebar";
 import { Header } from "./components/Header";
 import { DetailsPanel } from "./components/DetailsPanel";
+import { TerminalPanel } from "./components/TerminalPanel";
 import { Composer, type SendOptions } from "./components/Composer";
 import { SearchDialog, SettingsDialog } from "./components/WorkspaceDialogs";
 import { NewChatPage } from "./pages/NewChatPage";
@@ -32,6 +33,7 @@ export function App() {
   const [sidebar, setSidebar] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [details, setDetails] = useState(false);
+  const [terminal, setTerminal] = useState(false);
   const [toast, setToast] = useState("");
   const chat = data.chats.find((item) => item.id === selected);
   const project = data.projects.find(
@@ -43,6 +45,7 @@ export function App() {
     setDialog("");
     setDraft("");
     setError("");
+    setTerminal(false);
   }
   function newChat(id = "") {
     setProjectId(id);
@@ -51,6 +54,7 @@ export function App() {
     setDialog("");
     setDraft("");
     setError("");
+    setTerminal(false);
   }
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
@@ -72,11 +76,15 @@ export function App() {
           setSidebarHidden((hidden) => !hidden);
         }
       }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "j" && selected) {
+        event.preventDefault();
+        setTerminal((visible) => !visible);
+      }
       if (event.key === "Escape") setSidebar(false);
     };
-    window.addEventListener("keydown", key);
-    return () => window.removeEventListener("keydown", key);
-  }, [navigate]);
+    window.addEventListener("keydown", key, true);
+    return () => window.removeEventListener("keydown", key, true);
+  }, [navigate, selected]);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(""), 2600);
@@ -177,6 +185,9 @@ export function App() {
             setSidebarHidden(false);
           }}
           toggleDetails={() => setDetails(!details)}
+          detailsOpen={details}
+          toggleTerminal={() => setTerminal((visible) => !visible)}
+          terminalOpen={terminal}
           copy={() =>
             void navigator.clipboard
               .writeText(location.href)
@@ -215,16 +226,25 @@ export function App() {
             )}
           </div>
         </div>
+        {selected && loaded && (
+          <TerminalPanel
+            sessions={workspace.terminals}
+            request={request}
+            close={() => setTerminal(false)}
+            fail={setError}
+            theme={preferences.theme}
+            open={terminal}
+          />
+        )}
       </main>
-      {details && (
-        <DetailsPanel
-          artifacts={workspace.artifacts}
-          messages={messages}
-          chatSelected={!!selected}
-          loaded={loaded}
-          close={() => setDetails(false)}
-        />
-      )}
+      <DetailsPanel
+        artifacts={workspace.artifacts}
+        messages={messages}
+        chatSelected={!!selected}
+        loaded={loaded}
+        open={details}
+        close={() => setDetails(false)}
+      />
       {toast && (
         <div className="toast" role="status">
           <Check size={16} />

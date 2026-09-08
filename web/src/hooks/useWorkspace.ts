@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Snapshot, Message, Approval, Artifact } from "../types";
+import type { Snapshot, Message, Approval, Artifact, TerminalSession } from "../types";
 import { applyMessagePatch } from "../lib/messages";
 const empty: Snapshot = {
   users: [],
@@ -17,6 +17,7 @@ export function useWorkspace(selected: string) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [approvals, setApprovals] = useState<Approval[]>([]);
+  const [terminals, setTerminals] = useState<TerminalSession[]>([]);
   const [error, setError] = useState("");
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
@@ -100,6 +101,27 @@ export function useWorkspace(selected: string) {
           else entry.resolve(packet.result);
           return;
         }
+        if (packet.type === "terminal" && packet.chat_id === selectedRef.current) {
+          if (packet.event === "opened")
+            setTerminals((previous) => [
+              ...previous.filter((item) => item.id !== packet.terminal.id),
+              packet.terminal,
+            ]);
+          if (packet.event === "output")
+            setTerminals((previous) => previous.map((item) =>
+              item.id === packet.terminal_id
+                ? { ...item, output: (item.output + packet.data).slice(-1000000) }
+                : item,
+            ));
+          if (packet.event === "exit" || packet.event === "error")
+            setTerminals((previous) => previous.map((item) =>
+              item.id === packet.terminal_id ? { ...item, running: false } : item,
+            ));
+          if (packet.event === "closed")
+            setTerminals((previous) => previous.filter((item) => item.id !== packet.terminal_id));
+          if (packet.event === "error") setError(packet.message || "Terminal stopped.");
+          return;
+        }
         if (packet.type !== "patch") return;
         if (packet.state)
           setData((previous) => ({ ...previous, ...packet.state }));
@@ -131,6 +153,7 @@ export function useWorkspace(selected: string) {
     setMessages([]);
     setApprovals([]);
     setArtifacts([]);
+    setTerminals([]);
     setLoaded(false);
     if (!live) return;
     const id = selected;
@@ -142,6 +165,7 @@ export function useWorkspace(selected: string) {
         messages: Message[];
         approvals: Approval[];
       } | null;
+      terminals: TerminalSession[];
     }>("sync", { chat_id: id || null })
       .then((result) => {
         if (stale) return;
@@ -150,6 +174,7 @@ export function useWorkspace(selected: string) {
         setArtifacts(result.thread?.artifacts || []);
         setMessages(result.thread?.messages || []);
         setApprovals(result.thread?.approvals || []);
+        setTerminals(result.terminals || []);
       })
       .catch((error) => {
         if (!stale) setError(error.message);
@@ -166,6 +191,7 @@ export function useWorkspace(selected: string) {
     messages,
     approvals,
     artifacts,
+    terminals,
     error,
     setError,
     request,

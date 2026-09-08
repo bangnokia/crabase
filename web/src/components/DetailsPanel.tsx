@@ -8,15 +8,22 @@ export function DetailsPanel({
   chatSelected,
   loaded,
   close,
+  open,
 }: {
   artifacts: Artifact[];
   messages: Message[];
   chatSelected: boolean;
   loaded: boolean;
   close: () => void;
+  open: boolean;
 }) {
   return (
-    <aside className="details-panel" aria-label="Artifacts and agent activity">
+    <aside
+      className={`details-panel ${open ? "open" : ""}`}
+      aria-label="Artifacts and agent activity"
+      aria-hidden={!open}
+      inert={!open}
+    >
       <div className="details-heading">
         <h2>Artifacts</h2>
         <IconButton label="Close right sidebar" onClick={close}>
