@@ -1,0 +1,56 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { parseRoute, chatPath } from "../src/lib/routes.ts";
+import { applyMessagePatch } from "../src/lib/messages.ts";
+import { avatarUrl, validAvatarUrl } from "../src/lib/identity.ts";
+
+test("chat routes support direct loads without interpreting arbitrary paths", () => {
+  assert.deepEqual(parseRoute("/"), { page: "new" });
+  const id = "fb6904dc4c961211";
+  assert.deepEqual(parseRoute(chatPath(id)), { page: "chat", id });
+  assert.deepEqual(parseRoute(`/chat/${id}/`), { page: "chat", id });
+  for (const path of [
+    "/unknown",
+    "/chat/",
+    "/chat/../../etc",
+    `/chat/${id}/extra`,
+  ])
+    assert.equal(parseRoute(path).page, "missing");
+});
+
+test("stream patches upsert, append and order messages without mutating previous state", () => {
+  const first = { id: 1, body: "Hello" };
+  assert.deepEqual(
+    applyMessagePatch(
+      [first],
+      [{ id: 2, body: "Next" }],
+      [
+        { id: 1, delta: " world" },
+        { id: 99, delta: "ignored" },
+      ],
+    ),
+    [
+      { id: 1, body: "Hello world" },
+      { id: 2, body: "Next" },
+    ],
+  );
+  assert.equal(first.body, "Hello");
+  assert.deepEqual(
+    applyMessagePatch(
+      [{ id: 2, body: "old" }],
+      [{ id: 2, body: "complete" }, first],
+    ),
+    [first, { id: 2, body: "complete" }],
+  );
+});
+
+test("avatar preferences resolve by author and reject executable URLs", () => {
+  assert.notEqual(avatarUrl("user1", {}), avatarUrl("user2", {}));
+  assert.equal(
+    avatarUrl("user2", { user1: "https://example.com/photo.jpg" }),
+    avatarUrl("user2", {}),
+  );
+  assert.equal(avatarUrl("unknown", {}), "");
+  assert.equal(validAvatarUrl("javascript:alert(1)"), false);
+  assert.equal(validAvatarUrl("https://example.com/photo.jpg"), true);
+});

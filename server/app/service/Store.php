@@ -73,6 +73,18 @@ final class Store
         return trim((string)$config['agent_name']) ?: 'Crab';
     }
     public static function snapshot(): array {
-        return ['agentName'=>self::agentName(), 'models'=>json_decode(self::all("SELECT value FROM settings WHERE key='models'")[0]['value'] ?? '[]',true), 'projects'=>self::all('SELECT * FROM projects ORDER BY name'), 'chats'=>self::all('SELECT c.*, p.name AS project_name, (SELECT group_concat(DISTINCT author) FROM messages m WHERE m.chat_id=c.id AND m.role=\'user\') AS participants FROM chats c LEFT JOIN projects p ON p.id=c.project_id ORDER BY updated_at DESC, c.rowid DESC'), 'events'=>self::all('SELECT e.*, c.title FROM events e LEFT JOIN chats c ON c.id=e.chat_id ORDER BY e.id DESC LIMIT 50'), 'runtime'=>self::all("SELECT value FROM settings WHERE key='runtime'")[0]['value'] ?? 'offline'];
+        $chats = self::all("SELECT c.*, p.name AS project_name,
+            (SELECT json_group_array(DISTINCT author) FROM messages m WHERE m.chat_id=c.id AND m.role IN ('user','note')) AS participants
+            FROM chats c LEFT JOIN projects p ON p.id=c.project_id ORDER BY updated_at DESC, c.rowid DESC");
+        foreach ($chats as &$chat) $chat['participants'] = json_decode($chat['participants'], true);
+        unset($chat);
+        return [
+            'agentName'=>self::agentName(),
+            'models'=>json_decode(self::all("SELECT value FROM settings WHERE key='models'")[0]['value'] ?? '[]', true),
+            'projects'=>self::all('SELECT * FROM projects ORDER BY name'),
+            'chats'=>$chats,
+            'events'=>self::all('SELECT e.*, c.title FROM events e LEFT JOIN chats c ON c.id=e.chat_id ORDER BY e.id DESC LIMIT 50'),
+            'runtime'=>self::all("SELECT value FROM settings WHERE key='runtime'")[0]['value'] ?? 'offline',
+        ];
     }
 }

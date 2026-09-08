@@ -11,6 +11,8 @@ Crabase is a local shared workspace: React/Vite frontend, PHP Webman/Workerman b
 
 ## Rules
 
+- Read `design.md` for UI changes. Keep shared tokens in `web/src/styles/tokens.css` and components/pages separate from WebSocket and routing hooks.
+
 - Keep browser workspace traffic on the existing WebSocket protocol (`{id, action, data}` and `patch` events); do not reintroduce polling or GET/POST refresh loops.
 - Keep SQLite writes prepared, short, and compatible with WAL mode and foreign keys.
 - Validate untrusted paths, message text, model names, reasoning levels, origins, and command inputs at the backend boundary.

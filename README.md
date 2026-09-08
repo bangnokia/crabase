@@ -1,10 +1,10 @@
 # Crabase
 
-A Codex-style shared coding workspace, built with React, PHP Webman/Workerman, and SQLite. The PHP worker talks directly to `codex app-server` over JSONL stdin/stdout. Node is used only to build or develop the frontend.
+A Codex-style shared coding workspace, built with React, PHP Webman/Workerman, and SQLite. The PHP worker talks directly to `codex app-server` over JSONL stdin/stdout. Node is used for frontend development, builds, and checks.
 
 ## Run
 
-Requires macOS or Linux, PHP 8.1+ with PDO SQLite, pcntl and posix, Composer, Node 20.19+ or 22.12+, and an installed, authenticated Codex CLI.
+Requires macOS or Linux, PHP 8.1+ with PDO SQLite, pcntl and posix, Composer, Node 22.12+, and an installed, authenticated Codex CLI.
 
 ```sh
 npm install
@@ -28,7 +28,7 @@ If `codex` is not on PHP's PATH, set `CODEX_BIN` to its absolute executable path
 - Real Codex requests, streamed responses, terminal/file activity, command/file approval dialogs, cancellation, and queued requests.
 - SQLite in WAL mode, busy timeout, foreign keys, prepared statements, and short transactions.
 
-The three starter conversations are clearly identified as getting-started content, not real agent runs. In the composer, **Codex** invokes the agent; **Note** only saves a message. Notes are not automatically injected into the agent's context. Project paths are selected on the server's filesystem, not uploaded from a browser.
+The three starter conversations are clearly identified as getting-started content, not real agent runs. In the composer, **Enter** or the send arrow invokes the agent; the note icon only saves a message. Notes are not automatically injected into the agent's context. Project paths are selected on the server's filesystem, not uploaded from a browser.
 
 ## Current boundary
 
@@ -41,7 +41,15 @@ Conversation display data lives in `server/runtime/crabase.sqlite`; agent contex
 ## Layout
 
 ```text
-web/src/                   React UI and styles
+web/src/App.tsx            App composition and actions
+web/src/pages/             New-chat and conversation pages
+web/src/components/        Shared interface components
+web/src/hooks/             WebSocket, routing, preferences
+web/src/lib/               Pure route, identity, and streaming helpers
+web/src/styles/tokens.css   Design tokens for both themes
+web/src/style.css          Component layouts and states
+web/tests/                 Native Node frontend checks
+design.md                  Crabase design system
 server/app/service/Actions.php  Validated WebSocket commands
 server/app/service/Store.php    SQLite schema and persistence
 server/app/process/Codex.php    Codex lifecycle, queue, events, WebSocket updates

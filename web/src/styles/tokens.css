@@ -1,0 +1,61 @@
+/* Crabase design tokens. Components consume these roles in either theme. */
+:root {
+  color-scheme: light;
+  --font-sans:
+    "DM Sans Variable", "DM Sans", -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --surface: #faf9f6;
+  --sidebar: #f0efec;
+  --paper: #ffffff;
+  --text: #292a27;
+  --subtle: #62645e;
+  --muted: #686b63;
+  --line: #e3e3dc;
+  --hover: #e8e7e2;
+  --accent: #292d27;
+  --on-accent: #ffffff;
+  --focus: #52754a;
+  --danger: #ae352e;
+  --danger-surface: #fff3f1;
+  --code: #f0efeb;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --type-meta: 12px;
+  --type-label: 13px;
+  --type-control: 14px;
+  --type-body: 15px;
+  --type-section: 20px;
+  --type-title: 30px;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-strong: 550;
+  --radius-small: 8px;
+  --radius-panel: 16px;
+  --radius-composer: 20px;
+  --sidebar-width: 232px;
+  --content-width: 800px;
+  --shadow-dialog: 0 16px 64px #171a1726;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface: #20211f;
+  --sidebar: #191a18;
+  --paper: #282925;
+  --text: #e9e9e2;
+  --subtle: #b5b7ab;
+  --muted: #a2a597;
+  --line: #3e4038;
+  --hover: #30322b;
+  --accent: #e1e4d7;
+  --on-accent: #20211f;
+  --focus: #b1c9a8;
+  --danger: #ffaaa1;
+  --danger-surface: #372724;
+  --code: #171815;
+}

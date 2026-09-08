@@ -22,6 +22,13 @@ try {
         catch (InvalidArgumentException) {}
     }
     check(count(S::all('SELECT * FROM messages WHERE chat_id=?',[$chat])) === 2);
+    $participantsChat = A::handle('create', ['title'=>'Participant check'])['id'];
+    A::handle('message', ['chat_id'=>$participantsChat,'body'=>'note','mode'=>'note','author'=>'user1']);
+    A::handle('message', ['chat_id'=>$participantsChat,'body'=>'another note','mode'=>'note','author'=>'user1']);
+    A::handle('message', ['chat_id'=>$participantsChat,'body'=>'note','mode'=>'note','author'=>'Name, with comma']);
+    S::run('INSERT INTO messages (chat_id,role,author,body,created_at) VALUES (?,?,?,?,?)', [$participantsChat,'assistant','Crab','hello',gmdate('c')]);
+    $participants = array_column(S::snapshot()['chats'], 'participants', 'id')[$participantsChat];
+    check($participants === ['user1','Name, with comma']);
     echo "PASS: model/effort validation, defaults, immutable queued selections, and rejection before saving.\n";
 } finally {
     foreach ([$path,$path.'-wal',$path.'-shm'] as $file) if (is_file($file)) unlink($file);
