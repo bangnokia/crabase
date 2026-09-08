@@ -715,26 +715,13 @@ function App() {
             }}
           >
             <SquarePen size={17} />
-            <span>New thread</span>
+            <span>New chat</span>
             <kbd>⌘ N</kbd>
           </button>
           <button className="nav-item" onClick={() => setDialog("search")}>
             <Search size={17} />
             <span>Search threads</span>
             <kbd>⌘ K</kbd>
-          </button>
-          <button
-            className={view === "activity" ? "nav-item selected" : "nav-item"}
-            onClick={() => {
-              setView("activity");
-              setSidebar(false);
-            }}
-          >
-            <Activity size={17} />
-            <span>Activity</span>
-            {data.chats.some((c) => c.status !== "idle") && (
-              <span className="live-dot" />
-            )}
           </button>
         </nav>
         <div className="project-tree">
@@ -770,7 +757,11 @@ function App() {
                   className="project-label"
                   onClick={() => {
                     setProject(p.id);
-                    home();
+                    setCollapsed(
+                      collapsed.includes(p.id)
+                        ? collapsed.filter((id) => id !== p.id)
+                        : [...collapsed, p.id],
+                    );
                   }}
                 >
                   <Folder size={16} />
@@ -832,16 +823,6 @@ function App() {
           ))}
         </div>
         <div className="sidebar-bottom">
-          <button className="workspace-note" onClick={() => setDialog("about")}>
-            <div className="small-crab">
-              <Crab size={21} />
-            </div>
-            <div>
-              <strong>A place to build together</strong>
-              <span>Your shared workspace, on your machine.</span>
-            </div>
-            <ArrowUpRight size={14} />
-          </button>
           <div className="profile-row">
             <button
               className="profile-button"

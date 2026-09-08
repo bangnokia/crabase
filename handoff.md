@@ -2,7 +2,7 @@
 
 ## Current state
 
-Crabase is initialized at `/Users/daudau/Code/crabase` as a React/Vite frontend with a PHP Webman/Workerman backend and SQLite persistence. The local server is designed for one shared machine and binds to loopback only.
+Crabase is initialized at `/Users/daudau/Code/bangnokia/crabase` as a React/Vite frontend with a PHP Webman/Workerman backend and SQLite persistence. The local server is designed for one shared machine and binds to loopback only.
 
 The browser uses one WebSocket connection for workspace commands and live updates. The PHP WebSocket worker keeps one `codex app-server` process alive and queues agent turns sequentially. People can send team messages with the arrow button; the Crab icon dispatches the draft to the shared agent. Agent responses, tool events, approvals, and streamed text deltas are pushed to subscribed browser tabs.
 
@@ -33,7 +33,7 @@ Projects are optional existing readable folders on the machine. Standalone chats
 ## Run
 
 ```sh
-cd /Users/daudau/Code/crabase
+cd /Users/daudau/Code/bangnokia/crabase
 npm install
 composer install --working-dir=server
 npm run build
