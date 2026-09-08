@@ -965,13 +965,6 @@ function App() {
                 >
                   <div className="conversation-inner">
                     <div className="thread-heading">
-                      <div>
-                        <span className="page-eyebrow">
-                          {currentProject?.name || "CHAT"} <span> / </span>{" "}
-                          THREAD
-                        </span>
-                        <h1>{chat?.title || "Loading thread…"}</h1>
-                      </div>
                       <IconButton
                         label={
                           chat?.archived ? "Restore thread" : "Archive thread"
