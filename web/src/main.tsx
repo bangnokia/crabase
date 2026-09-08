@@ -16,6 +16,7 @@ import {
   Check,
   X,
   MessageSquare,
+  StickyNote,
   Activity,
   Archive,
   Copy,
@@ -43,6 +44,7 @@ type Chat = {
   archived: number;
   updated_at: string;
   project_name: string | null;
+  participants?: string;
 };
 type Message = {
   id: number;
@@ -544,7 +546,7 @@ function App() {
                 !e.nativeEvent.isComposing
               ) {
                 e.preventDefault();
-                void send("note");
+                void send("agent");
               }
             }}
             placeholder="Write to the team…"
@@ -614,6 +616,7 @@ function App() {
               ) : null}
             </div>
             <div className="send-controls">
+              <button className="agent-send-button" aria-label="Write note" title="Write note" disabled={!draft.trim() || busy || !loaded || !live} onClick={() => void send("note")}><StickyNote size={16} /></button>
               {active && (
                 <IconButton
                   label="Stop agent and queued requests"
@@ -785,7 +788,7 @@ function App() {
                         <span
                           className={`thread-status ${c.status === "idle" ? "" : "working"}`}
                         >
-                          {c.status === "idle" ? <span className="chat-avatars"><i>🙂</i><i>😎</i></span> : (
+                          {c.status === "idle" ? <span className="chat-avatars">{(c.participants || "user1").split(",").map((u: string) => <i className={`photo-${u}`} key={u} />)}</span> : (
                             <Loader2 size={13} className="spin" />
                           )}
                         </span>

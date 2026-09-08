@@ -255,7 +255,8 @@ kbd {
   margin: 2px 0;
 }
 .chat-avatars { display: inline-flex; width: 22px; }
-.chat-avatars i { width: 14px; height: 14px; border-radius: 50%; font-style: normal; font-size: 9px; display: grid; place-items: center; background: var(--surface); border: 1px solid var(--line); }
+.chat-avatars i { width: 14px; height: 14px; border-radius: 50%; display: block; border: 1px solid var(--line); background: linear-gradient(145deg,#f6c7a8,#9b5b45); }
+.chat-avatars .photo-user2 { background: linear-gradient(145deg,#b9d7f5,#4b6fa8); }
 .chat-avatars i + i { margin-left: -5px; }
 .recent-section { display: none; }
 .thread-link > span:last-child {
