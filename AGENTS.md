@@ -22,4 +22,4 @@ Crabase is a local shared workspace: React/Vite frontend, PHP Webman/Workerman b
 - Agent display name is configurable through `server/config/crabase.php` / `CRABASE_AGENT_NAME`; default is `Crab`.
 - Projects are optional existing readable folders. Standalone chats must remain project-less.
 - Do not expose loopback listeners publicly. Email/password sessions are required on HTTP data and WebSocket boundaries; derive message identity from the session, never client user_id. Project permissions and worktree isolation are not implemented; signed-in members are trusted collaborators. Never expose password/session hashes in snapshots. Preserve the last enabled admin.
-- Run `npm run build` and `npm test` after changes. Keep the implementation minimal and update `handoff.md` for architectural changes.
+- Run `npm run build` and `npm test` after changes. Keep the implementation minimal.
