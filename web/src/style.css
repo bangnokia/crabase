@@ -1413,6 +1413,7 @@ small {
   --trees-bg-muted-override: var(--hover);
   --trees-fg-override: var(--text);
   --trees-fg-muted-override: var(--muted);
+  --trees-status-ignored-override: var(--muted);
   --trees-border-color-override: var(--line);
   --trees-selected-bg-override: var(--hover);
   --trees-focus-ring-color-override: var(--focus);

@@ -86,6 +86,7 @@ export type WorkspaceChange = {
 
 export type ProjectWorkspace = {
   paths: string[];
+  ignored: string[];
   git: boolean;
   branch: string | null;
   changes: WorkspaceChange[];

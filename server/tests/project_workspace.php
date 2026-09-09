@@ -40,6 +40,23 @@ try {
     workspaceCheck($snapshot['git'] === true);
     workspaceCheck($snapshot['paths'] === ['new.php','readme.md']);
     workspaceCheck(array_column($snapshot['changes'], 'status', 'path') === ['new.php'=>'untracked','readme.md'=>'modified']);
+    file_put_contents($root.'/project/.gitignore', ".env\n.cache/\n");
+    file_put_contents($root.'/project/.env', "TEST=1\n");
+    mkdir($root.'/project/.cache');
+    file_put_contents($root.'/project/.cache/data', 'cached');
+    file_put_contents($root.'/project/.hidden', 'visible');
+    $snapshot = W::snapshot($data);
+    foreach (['.gitignore', '.env', '.cache/data', '.hidden'] as $path) {
+        workspaceCheck(in_array($path, $snapshot['paths'], true));
+    }
+    workspaceCheck($snapshot['ignored'] === ['.cache/data', '.env']);
+    workspaceCheck(!array_intersect($snapshot['ignored'], array_column($snapshot['changes'], 'path')));
+    workspaceCheck(!array_filter($snapshot['paths'], fn($path) => str_starts_with($path, '.git/')));
+    workspaceCheck(W::file($data + ['path'=>'.env'])['contents'] === "TEST=1\n");
+    mkdir($root.'/outside/.hidden');
+    file_put_contents($root.'/outside/.hidden/file', 'visible');
+    $plain = W::snapshot(['project_id'=>'plain']);
+    workspaceCheck($plain['paths'] === ['.hidden/', '.hidden/file'] && $plain['ignored'] === []);
     $file = W::file($data + ['path'=>'readme.md']);
     workspaceCheck($file['contents'] === "after\n" && strlen($file['hash']) === 64);
     workspaceCheck(str_contains(W::diff($data + ['path'=>'readme.md'])['patch'], '+after'));
@@ -68,6 +85,10 @@ try {
     workspaceCheck(isset(W::file($data + ['path'=>'image.png'])['unsupported']));
     echo "PASS: project file listing, Git status and diffs, text/image previews, and path boundaries.\n";
 } finally {
+    foreach (['project/.gitignore', 'project/.env', 'project/.hidden', 'project/.cache/data', 'outside/.hidden/file'] as $path) {
+        if (is_file($root.'/'.$path)) unlink($root.'/'.$path);
+    }
+    foreach (['project/.cache', 'outside/.hidden'] as $path) if (is_dir($root.'/'.$path)) rmdir($root.'/'.$path);
     if (is_link($root.'/project/escape')) unlink($root.'/project/escape');
     foreach ([$root.'/project/new.php',$root.'/project/readme.md',$root.'/project/image.png'] as $file) if (is_file($file)) unlink($file);
     $git = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root.'/project/.git', FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);

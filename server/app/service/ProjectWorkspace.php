@@ -32,8 +32,15 @@ final class ProjectWorkspace
     {
         $root = self::root($data);
         [$git, $branch] = self::gitInfo($root);
+        $ignored = $git ? self::gitPaths($root, true) : [];
+        // ponytail: keep the 5,000-entry snapshot cap; use lazy folder loading if larger trees need it.
+        $paths = array_slice(array_values(array_unique(array_merge(
+            $git ? self::gitPaths($root) : self::diskPaths($root), $ignored
+        ))), 0, 5000);
+        natcasesort($paths);
         return [
-            'paths' => $git ? self::gitPaths($root) : self::diskPaths($root),
+            'paths' => array_values($paths),
+            'ignored' => array_values(array_intersect($ignored, $paths)),
             'git' => $git,
             'branch' => $branch,
             'changes' => $git ? self::changesFor($root) : [],
@@ -160,9 +167,9 @@ final class ProjectWorkspace
         return [true, $branchStatus === 0 ? trim($branch) : null];
     }
 
-    private static function gitPaths(string $root): array
+    private static function gitPaths(string $root, bool $ignored = false): array
     {
-        [$status, $output] = self::command($root, ['ls-files','-z','--cached','--others','--exclude-standard','--','.']);
+        [$status, $output] = self::command($root, ['ls-files','-z',$ignored ? '--ignored' : '--cached','--others','--exclude-standard','--','.']);
         if ($status !== 0) return [];
         $paths = array_values(array_filter(explode("\0", $output), fn($path) => $path !== ''));
         natcasesort($paths);
@@ -174,7 +181,7 @@ final class ProjectWorkspace
         $paths = [];
         $directory = new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS);
         $filter = new \RecursiveCallbackFilterIterator($directory, function ($item) {
-            return !$item->isLink() && !in_array($item->getFilename(), ['.git','node_modules','vendor'], true);
+            return !$item->isLink() && $item->getFilename() !== '.git';
         });
         foreach (new \RecursiveIteratorIterator($filter, \RecursiveIteratorIterator::SELF_FIRST) as $item) {
             $relative = substr($item->getPathname(), strlen($root) + 1);

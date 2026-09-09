@@ -49,7 +49,9 @@ Register the exact redirect URL `http://127.0.0.1:8787/auth/oauth/callback` with
 
 The integration uses authorization code + S256 PKCE, browser-bound one-use state (10-minute expiry), verified TLS, and server-side token exchange. Provider access tokens are used only to fetch the profile, then discarded. First login requires a top-level `id`, `email`, and either boolean `email_verified: true` or a non-null valid `email_verified_at` timestamp from `/api/user`. A matching enabled account is linked; otherwise a regular user account is created using the provider name and verified email. Disabled accounts remain blocked, and provider roles never grant administrator access. Later logins use the stored provider ID binding. Passport-created accounts have no known local password; an administrator can set one if needed. Existing password login remains available. Enabling Passport therefore grants verified Passport users access to this shared workspace. Login completes on `127.0.0.1:8787`, including when initiated from Vite. The OAuth flow cookie is HttpOnly/SameSite=Lax so the provider redirect can complete; normal session cookies remain Strict. This fixed loopback callback is not public-deployment configuration.
 
-## VPS setup
+## Deploy — internal team VPS
+
+Our deployment target is one VPS for a trusted team, reached over the team's private mesh network. Use the systemd setup below; Docker, Composer-global installation, and a public installer are not needed. The intended CI/CD flow is **push to `main` → test/build in GitHub Actions → deploy the tested commit over SSH**. This section documents the procedure; a deployment workflow and `crabase update` command are **not implemented yet**.
 
 Crabase requires login through email/password or configured TDA Passport OAuth2, but project authorization and OS isolation are not implemented. Worktrees separate feature files, not user permissions. All enabled users are trusted collaborators with access to the shared workspace and its terminal. Keep both listeners on loopback and connect through an SSH tunnel. Do not expose ports 8787 or 8788 through a public firewall, reverse proxy, or container port mapping.
 
@@ -59,7 +61,7 @@ The VPS needs Git, Composer, PHP 8.1+ with PDO SQLite, `pcntl`, and `posix`, Nod
 
 ```sh
 sudo apt update
-sudo apt install -y git unzip php-cli php-sqlite3 php-mbstring composer
+sudo apt install -y git unzip sqlite3 php-cli php-sqlite3 php-mbstring php-curl composer
 php -m | grep -E 'pcntl|posix|pdo_sqlite'
 node --version
 npm --version
@@ -147,16 +149,18 @@ sudo journalctl -u crabase -f
 
 ### 4. Connect privately
 
-From your computer, forward both the HTTP and WebSocket listeners:
+Join the same mesh network as the VPS, then use its mesh hostname or address for SSH. **The current application still requires localhost browser URLs**: joining the mesh does not make direct `http://<mesh-ip>:8787` access supported. HTTP/WS checks and the TDA callback are loopback-specific. From your computer, forward both listeners:
 
 ```sh
 ssh -N \
   -L 8787:127.0.0.1:8787 \
   -L 8788:127.0.0.1:8788 \
-  crabase@YOUR_VPS_HOST
+  crabase@YOUR_VPS_MESH_HOST
 ```
 
 Keep that terminal open and visit http://127.0.0.1:8787 locally. The browser loads the built frontend through port 8787 and connects to the WebSocket through the forwarded port 8788.
+
+Each team member opens their own tunnel and signs in with their own Crabase account. Keep local ports 8787 and 8788 free. For TDA login, register `http://127.0.0.1:8787/auth/oauth/callback` and configure the client ID/secret on the VPS as described above; the browser callback reaches the VPS through the tunnel. Do not put OAuth secrets or the service user's Codex credentials in frontend build variables.
 
 If UFW is enabled, allow SSH but do not add rules for Crabase's ports:
 
@@ -166,37 +170,77 @@ sudo ufw enable
 sudo ufw status
 ```
 
-### 5. Update, back up, and restore
+### 5. Persistent data and backups
 
-Before an update, make a consistent SQLite backup and preserve generated artifacts and Codex thread storage:
+Keep this application checkout dedicated to deployment—do not use it as a team coding project. With the paths above, preserve:
 
-```sh
-sudo -iu crabase
-cd ~/crabase
-mkdir -p ~/backups
-sqlite3 server/runtime/crabase.sqlite \
-  ".backup '/home/crabase/backups/crabase.sqlite'"
-cp -a ~/workspaces/.artifacts ~/backups/artifacts
-cp -a ~/.codex ~/backups/codex
-```
+| Path | Contents |
+| --- | --- |
+| `/home/crabase/crabase/.env` | Server configuration and OAuth secret |
+| `/home/crabase/crabase/server/runtime/` | Default SQLite database, uploaded avatars, standalone-chat folders and runtime files |
+| `/home/crabase/workspaces/` | Original project repositories, `.worktrees`, `.artifacts` and staged attachments |
+| `/home/crabase/.codex/` | Codex configuration, authentication and thread history (or the configured Codex data directory) |
 
-An update should stop the persistent worker, install the checked-in dependency versions, rebuild, migrate, and restart:
+If `CRABASE_DB` is overridden, back up that database and its adjacent `avatars/` directory too. Worktrees depend on the original repositories' Git metadata: preserve both, including ignored project data such as `.env` and SQLite files. Never run `git clean -fdx` or deploy with a broad `rsync --delete` across these paths.
+
+Before stopping the service, ask the team to pause changes, let queued/running jobs finish or cancel them, and close terminals and preview processes. Stop Crabase so no new jobs arrive, then back up. The commands below assume the default database path from step 2:
 
 ```sh
 sudo systemctl stop crabase
 sudo -iu crabase
 cd ~/crabase
+mkdir -p /home/crabase/backups
+chmod 700 /home/crabase/backups
+deploy_backup=$(mktemp -d /home/crabase/backups/deploy-XXXXXXXX)
+sqlite3 server/runtime/crabase.sqlite \
+  ".backup '$deploy_backup/crabase.sqlite'"
+cp -a .env "$deploy_backup/env"
+cp -a server/runtime "$deploy_backup/runtime"
+cp -a /home/crabase/workspaces "$deploy_backup/workspaces"
+cp -a /home/crabase/.codex "$deploy_backup/codex"
+git rev-parse HEAD > "$deploy_backup/commit"
+```
+
+These backups contain secrets; keep them private and copy them to protected off-host storage. Large workspaces can use filesystem snapshots instead of full copies. Do not let other processes write project databases during the backup.
+
+### 6. Manual update
+
+After the backup, while still in the service-user shell at `~/crabase`, update the deployment checkout. It must have no tracked local changes; investigate any changes rather than resetting them:
+
+```sh
+git status --short
 git pull --ff-only
 npm ci
 composer install --working-dir=server --no-dev --optimize-autoloader
 npm run build
-cd server && vendor/bin/phinx migrate
+php server/vendor/bin/phinx migrate -c server/phinx.php
 exit
 sudo systemctl start crabase
 sudo systemctl status crabase
+curl --silent --show-error --include http://127.0.0.1:8787/auth/session
 ```
 
-To restore, stop Crabase, replace `server/runtime/crabase.sqlite` with the backup, restore `.artifacts` and `~/.codex` to their original locations and ownership, then start the service. Never run migration rollback commands against the only copy of workspace data.
+Run commands one at a time and **stop on any failure**; do not start the service after a failed install, build or migration. The unauthenticated session check should return HTTP `401` with a JSON response containing `user: null`; a connection error or `5xx` is a deployment failure. Check sign-in, WebSocket connectivity, opening a project file and a terminal through the tunnel. The session endpoint alone does not verify the agent or terminal host.
+
+### 7. Internal CI/CD — push to deploy
+
+When we add the workflow, use this sequence:
+
+1. On pull requests and pushes to `main`, use an isolated runner with PHP/extensions, Composer, Git, Node/npm and Python 3. Run `npm ci`, `composer install --working-dir=server`, `npm run build`, and `npm test`. Tests use disposable data and ports; **do not run them on the live application host**.
+2. Only a successful push to protected `main` may deploy. Save the built `server/public/` files as an artifact tied to that exact commit SHA. Never build with the production `.env` or Codex credentials.
+3. Give the deployment job private mesh access to the VPS, or use a dedicated trusted runner already on the mesh. GitHub-hosted runners cannot reach a private mesh address without that connection. Do not run untrusted PR jobs on a runner with production access.
+4. Use a GitHub deployment environment for the SSH key, mesh credentials and host settings. Pin the SSH host key using a fingerprint verified outside CI; do not disable host-key checking. Limit service-control privileges to the Crabase unit.
+5. Serialize deployments with a concurrency group; do not cancel a deployment halfway through migrations. Until we implement an active-job/terminal drain check, require operator approval after the team pauses work. Push-to-deploy must not silently interrupt active sessions.
+6. Record the previous deployed SHA, stop the service and make the backups above. Fetch and deploy the **exact tested SHA**, not whatever happens to be the latest `main`. Install PHP dependencies on the VPS and run `npm ci --omit=dev` there for the Node PTY runtime; do not upload a runner's platform-specific `node_modules`.
+7. Install that SHA's frontend artifact into `server/public/`, run migrations, start systemd and perform the checks from step 6. Record the deployed SHA and retain the previous artifact and backup. Deployment stops on failure and reports which step failed.
+
+Start with this in-place deployment checkout to keep operations simple. If we later use versioned release folders, keep `.env`, the entire runtime directory, workspace data and Codex storage at stable shared paths; changing `CRABASE_DB` alone does not relocate standalone-chat folders.
+
+### 8. Restore or roll back
+
+Stop Crabase first. For a code-only failure with a compatible database schema, redeploy the previous tested SHA, its dependency versions and frontend artifact. Do not automatically run `phinx rollback` on production.
+
+If a migration or data change requires restoring a backup, preserve the failed state first and restore the database and matching runtime/workspace/Codex data to their original paths and ownership. Use SQLite's restore operation while the app is stopped rather than replacing a database underneath live WAL connections. Restore `.env` only if needed. A data restore loses changes made after the backup; coordinate it with the team before restarting. Never run migration rollback commands against the only copy of workspace data.
 
 For failures, check `journalctl -u crabase`, confirm the service user's `CODEX_BIN`, run `codex login` as that user, verify directory ownership, and run `vendor/bin/phinx status` from `server/`.
 

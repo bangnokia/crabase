@@ -84,7 +84,10 @@ export function ProjectWorkspacePanel({ project, request, theme, actions, fileSe
 
   useEffect(() => {
     model.resetPaths(workspace?.paths || []);
-    model.setGitStatus(workspace?.changes || []);
+    model.setGitStatus([
+      ...(workspace?.changes || []),
+      ...(workspace?.ignored || []).map(path => ({ path, status: "ignored" as const })),
+    ]);
   }, [model, workspace]);
 
   useEffect(() => {
