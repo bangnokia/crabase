@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Snapshot, Message, Approval, Artifact, TerminalSession } from "../types";
 import { applyMessagePatch } from "../lib/messages";
 const empty: Snapshot = {
+  pins: [],
   users: [],
   agentName: "Crab",
   models: [],

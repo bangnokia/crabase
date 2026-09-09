@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
-import { Check, Moon, Sun } from "lucide-react";
+import { Check, Moon, Sun, TriangleAlert } from "lucide-react";
 import type { Account, Request } from "../types";
 import { ErrorNotice } from "../components/ui";
 import { useAuth } from "../components/AuthGate";
+import { useAttachments } from '../hooks/useAttachments';
+import { AttachmentList } from '../components/AttachmentList';
 
 export function SettingsPage({ theme, setTheme, request, back }: {
   theme: string; setTheme: (theme: string) => void; request: Request; back: () => void;
@@ -10,30 +12,56 @@ export function SettingsPage({ theme, setTheme, request, back }: {
   const { user, refresh, logout } = useAuth();
   const [page, setPage] = useState('profile');
   const [error, setError] = useState('');
-  return <div className="settings-page"><button className="text-button" onClick={back}>← Back to workspace</button><h1>Settings</h1>
+  return <div className="settings-page">{!user.avatar_required && <button className="text-button" onClick={back}>← Back to workspace</button>}<h1>Settings</h1>
     <div className="settings-layout">
       <nav className="settings-nav" aria-label="Settings">
         <button aria-current={page === 'profile' ? 'page' : undefined} onClick={() => setPage('profile')}>Profile</button>
-        <button aria-current={page === 'appearance' ? 'page' : undefined} onClick={() => setPage('appearance')}>Appearance</button>
-        {!!user.admin && <><span className="settings-group">Admin</span>
+        <button disabled={user.avatar_required} aria-current={page === 'appearance' ? 'page' : undefined} onClick={() => setPage('appearance')}>Appearance</button>
+        {!!user.admin && !user.avatar_required && <><span className="settings-group">Admin</span>
           <button aria-current={page === 'users' ? 'page' : undefined} onClick={() => setPage('users')}>Users</button></>}
         <button className="settings-logout" onClick={() => void logout().catch(error => setError(error.message))}>Sign out</button>
       </nav>
       <section className="settings-content">
         <ErrorNotice message={error} />
-        {page === 'profile' && <AccountForm account={user} save={async data => {
+        {(page === 'profile' || user.avatar_required) && <><AvatarUpload request={request} /> <AccountForm account={user} save={async data => {
           await request('profileSave', data); await refresh();
-        }} />}
-        {page === 'appearance' && <><h2>Appearance</h2><div className="theme-options">
+        }} /></>}
+        {page === 'appearance' && !user.avatar_required && <><h2>Appearance</h2><div className="theme-options">
           {['light','dark'].map(value => <button key={value} aria-pressed={theme === value} onClick={() => setTheme(value)}>
             {value === 'light' ? <Sun size={18} /> : <Moon size={18} />}{value === 'light' ? 'Light' : 'Dark'}
             {theme === value && <Check size={16} />}
           </button>)}
         </div></>}
-        {page === 'users' && !!user.admin && <UserManagement request={request} />}
+        {page === 'users' && !!user.admin && !user.avatar_required && <UserManagement request={request} />}
       </section>
     </div>
   </div>;
+}
+
+function AvatarUpload({ request }: { request: Request }) {
+  const { user, refresh } = useAuth();
+  const upload = useAttachments(request, 0, user.id);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  return <section className="profile-avatar-upload" aria-label="Profile photo">
+    <h2>Profile photo</h2>
+    {user.avatar_required ? <div className="profile-avatar-warning" role="alert">
+      <TriangleAlert size={18} aria-hidden="true" />
+      <div><strong>Profile photo required</strong><p>Upload and save a photo to enter the workspace. We couldn’t find an avatar or Gravatar for your account.</p></div>
+    </div> :
+      <img className="profile-avatar-preview" src={user.avatar_url || user.avatar_fallback} alt="Your profile photo" />}
+    <label>Choose image<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" disabled={busy} onChange={event => {
+      const file = event.target.files?.[0]; if (file) { upload.clear(); upload.add([file]); setError(''); } event.target.value = '';
+    }} /></label>
+    <AttachmentList files={upload.files} remove={upload.remove} retry={upload.retry} disabled={busy} />
+    <ErrorNotice message={error || upload.error} />
+    <button className="button secondary" disabled={busy || !upload.files.length || !upload.ready} onClick={async () => {
+      setBusy(true); setError('');
+      try { await request('avatarSave', { id: upload.ids()[0] }); upload.clear(); await refresh(); }
+      catch (error) { setError((error as Error).message); }
+      finally { setBusy(false); }
+    }}>{busy ? 'Saving…' : upload.files.length && !upload.ready ? 'Uploading…' : 'Save photo'}</button>
+  </section>;
 }
 
 function AccountForm({ account, admin = false, save, cancel }: {
@@ -58,14 +86,13 @@ function AccountForm({ account, admin = false, save, cancel }: {
   }}>
     <h2>{admin ? account ? 'Edit user' : 'New user' : 'Profile'}</h2>
     <label>Display name<input name="name" defaultValue={account?.name} required maxLength={100} autoComplete="name" /></label>
-    <label>Login email<input name="email" type="email" defaultValue={account?.email} required maxLength={254} autoComplete="username" /></label>
+    <label>Login email<input name="email" type="email" defaultValue={account?.email} readOnly={!!account} required maxLength={254} autoComplete="username" /></label>
     {!admin && <>
-      <label>Avatar URL<input name="avatar_url" type="url" defaultValue={account?.avatar_url} /></label>
       <label>Git author name <small>(optional)</small><input name="git_name" defaultValue={account?.git_name} maxLength={100} /></label>
       <label>Git author email <small>(optional)</small><input name="git_email" type="email" defaultValue={account?.git_email} maxLength={254} /></label>
       <p className="muted">Use your GitHub-verified or noreply email for commit credit. Leave it empty to omit co-author credit.</p>
       <label>Current password<input name="current_password" type="password" autoComplete="current-password" /></label>
-      <p className="muted">Required only when changing your login email or password.</p>
+      <p className="muted">Required only when changing your password. Login email cannot be changed.</p>
     </>}
     <label>{account ? 'New password (leave blank to keep)' : 'Password'}<input name="password" type="password"
       autoComplete="new-password" minLength={6} maxLength={72} required={!account} /></label>

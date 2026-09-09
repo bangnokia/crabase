@@ -26,6 +26,8 @@ try {
     denied(fn () => A::update($member, ['id'=>$id],true));
     denied(fn () => A::update($admin, ['id'=>$id,'name'=>'Admin','email'=>'admin@example.com','admin'=>false,'enabled'=>true],true));
     denied(fn () => A::update($member, ['name'=>'Member','email'=>'changed@example.com'],false));
+    denied(fn () => A::update($member, ['name'=>'Member','email'=>'changed@example.com','current_password'=>'test-password'],false));
+    denied(fn () => A::update($admin, ['id'=>$memberId,'name'=>'Member','email'=>'changed@example.com','enabled'=>true],true));
     A::update($member,['name'=>'Member','email'=>'member@example.com','admin'=>true,'git_name'=>'Git Name','git_email'=>'git@example.com'],false);
     authCheck(!A::user($memberToken)['admin']);
     S::run("INSERT INTO chats (id,title,created_at,updated_at) VALUES ('test','Test','now','now')");
@@ -58,12 +60,26 @@ try {
     S::run('INSERT INTO oauth_flows VALUES (?,?,?,?)',[hash('sha256',$state),hash('sha256',$browser),'verifier',time()-1],false);
     denied(fn () => app\service\OAuth::consume($state,$browser));
     denied(fn () => app\service\OAuth::account(['id'=>'provider-1','email'=>'admin@example.com']));
-    denied(fn () => app\service\OAuth::account(['id'=>'provider-1','email'=>'unknown@example.com','email_verified'=>true]));
+    $passportProfile = ['id'=>'passport-new','name'=>'Admin','email'=>'new-passport@example.com','email_verified'=>true,'admin'=>true];
+    $passportId = app\service\OAuth::account($passportProfile);
+    $passportAccount = app\model\Account::query()->find($passportId);
+    authCheck($passportAccount->admin === 0 && $passportAccount->enabled === 1);
+    authCheck(app\model\User::query()->find($passportId)->name !== 'Admin');
+    authCheck(app\service\OAuth::account($passportProfile) === $passportId);
+    authCheck(A::user(A::session($passportId))['id'] === $passportId);
+    $count = app\model\Account::query()->count();
+    denied(fn () => app\service\OAuth::account(['id'=>'unverified','email'=>'unverified@example.com']));
+    authCheck(app\model\Account::query()->count() === $count);
+    app\model\Account::query()->whereKey($passportId)->update(['enabled'=>0]);
+    denied(fn () => app\service\OAuth::account($passportProfile));
+    denied(fn () => app\service\OAuth::account(array_replace($passportProfile, ['id'=>'different-subject'])));
     authCheck(app\service\OAuth::account(['id'=>'provider-1','email'=>'admin@example.com','email_verified_at'=>'2026-09-09T00:00:00Z']) === $id);
     authCheck(app\service\OAuth::account(['id'=>'provider-1','email'=>'changed@example.com']) === $id);
     denied(fn () => app\service\OAuth::account(['id'=>'provider-2','email'=>'admin@example.com','email_verified'=>true]));
     for ($i=0;$i<10;$i++) denied(fn () => A::login(['email'=>'none@example.com','password'=>'wrong'],'limited'));
     denied(fn () => A::login(['email'=>'admin@example.com','password'=>'test-password'],'limited'));
+    authCheck(!array_key_exists('password_hash', app\model\Account::query()->find($id)->toArray()));
+    authCheck(!array_key_exists('token_hash', app\model\AuthSession::query()->first()->toArray()));
     echo "PASS: accounts, hashing, sessions, revocation, throttling, roles, last admin, Gravatar and coauthors.\n";
 } finally {
     foreach ([$db,$db.'-wal',$db.'-shm'] as $file) if (is_file($file)) unlink($file);

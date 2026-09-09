@@ -54,6 +54,18 @@ try {
     A::handle('message', array_replace($send, ['attachments'=>[$image]]));
     $second = S::thread($chat)['messages'][1];
     attachmentCheck(U::input(['chat_id'=>$chat,'message_id'=>$second['id']])[1]['type'] === 'localImage');
+    $avatar = $start('avatar.png', strlen($png))['id'];
+    A::handle('uploadChunk', ['user_id'=>'uploader','id'=>$avatar,'offset'=>0,'bytes'=>base64_encode($png)]);
+    rejected(fn () => A::handle('avatarSave', ['user_id'=>'other','id'=>$avatar]));
+    $result = A::handle('avatarSave', ['user_id'=>'uploader','id'=>$avatar]);
+    attachmentCheck(\app\model\User::query()->find('uploader')->avatar_url === $result['avatar_url']);
+    attachmentCheck(file_get_contents(\app\service\Avatars::resolve(basename($result['avatar_url']))) === $png);
+    attachmentCheck(\app\service\Avatars::resolve('../test.sqlite') === null);
+    rejected(fn () => A::handle('avatarSave', ['user_id'=>'uploader','id'=>$avatar]));
+    $text = $start('not-image.txt', 5)['id'];
+    A::handle('uploadChunk', ['user_id'=>'uploader','id'=>$text,'offset'=>0,'bytes'=>base64_encode('hello')]);
+    rejected(fn () => A::handle('avatarSave', ['user_id'=>'uploader','id'=>$text]));
+    A::handle('uploadRemove', ['user_id'=>'uploader','id'=>$text]);
     $expired = $start('expired.txt', 1)['id'];
     S::run('UPDATE uploads SET expires=0 WHERE id=?', [$expired], false);
     U::cleanup();

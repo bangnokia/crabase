@@ -9,7 +9,7 @@ try {
     $process = proc_open([PHP_BINARY, dirname(__DIR__).'/vendor/bin/phinx', 'migrate', '-c', dirname(__DIR__).'/phinx.php'], [0=>['file','/dev/null','r'],1=>['file','/dev/null','w'],2=>STDERR], $pipes);
     check(is_resource($process) && proc_close($process) === 0);
     S::db();
-    S::run('INSERT INTO projects VALUES (?,?,?)', ['test', 'Test', dirname(__DIR__, 2)]);
+    S::run('INSERT INTO projects (id,name,path) VALUES (?,?,?)', ['test', 'Test', dirname(__DIR__, 2)]);
     $project = S::all('SELECT id FROM projects LIMIT 1')[0]['id'];
     check(S::snapshot()['projects'][0]['created_order'] === 1);
     check(array_key_exists('branch', A::handle('projectContext', ['project_id'=>$project])));
@@ -54,6 +54,24 @@ try {
         });
     } catch (RuntimeException) {}
     check($user->fresh()->name === 'user1' && $user->fresh()->avatar_url === 'https://example.com/avatar.png');
+    $revision = fn () => (int)\app\model\Setting::query()->whereKey('revision')->value('value');
+    $before = $revision();
+    S::notify(\app\model\Message::query()->whereKey(-1)->update(['body'=>'missing']));
+    check($revision() === $before);
+    $message = \app\model\Message::query()->where('chat_id', $chat)->first();
+    $original = $message->body;
+    \app\model\Message::appendBody($message->id, "'quoted' \nΔ");
+    check($message->fresh()->body === $original."'quoted' \nΔ" && $revision() === $before + 1);
+    $before = $revision();
+    try {
+        \support\Db::transaction(function () use ($message) {
+            \app\model\Message::appendBody($message->id, 'rolled back');
+            \app\model\Setting::put('rollback-test', 'value');
+            throw new RuntimeException('rollback');
+        });
+    } catch (RuntimeException) {}
+    check($revision() === $before && !\app\model\Setting::query()->whereKey('rollback-test')->exists());
+    check(!str_ends_with($message->fresh()->body, 'rolled back'));
     $workspace = sys_get_temp_dir().'/crabase-project-'.bin2hex(random_bytes(8));
     $previousRoot = getenv('CRABASE_WORKSPACE_ROOT');
     mkdir($workspace); mkdir($workspace.'/Folder name');
@@ -62,6 +80,34 @@ try {
         $opened = A::handle('project', ['path'=>$workspace.'/Folder name', 'name'=>'Ignored custom name']);
         check(\app\model\Project::find($opened['id'])->name === 'Folder name');
         check(A::handle('project', ['path'=>$workspace.'/Folder name'])['id'] === $opened['id']);
+        $id = $opened['id'];
+        file_put_contents($workspace.'/Folder name/keep.txt', 'keep');
+        $owned = A::handle('create', ['project_id'=>$id])['id'];
+        A::handle('message', ['chat_id'=>$owned,'body'=>'keep until deleted','mode'=>'note','user_id'=>$users['user1']]);
+        S::run('UPDATE chats SET thread_id=? WHERE id=?', ['runtime-thread', $owned]);
+        A::handle('projectArchive', ['project_id'=>$id,'archived'=>true]);
+        check(\app\model\Project::find($id)->archived === 1 && S::thread($owned)['chat']['archived'] === 0);
+        A::handle('projectArchive', ['project_id'=>$id,'archived'=>false]);
+        check(\app\model\Project::find($id)->archived === 0);
+        try { A::handle('projectArchive', ['project_id'=>$id,'archived'=>'false']); throw new RuntimeException('Invalid archive accepted'); }
+        catch (InvalidArgumentException) {}
+        S::run('INSERT INTO jobs (chat_id,prompt,message_id) SELECT chat_id,body,id FROM messages WHERE chat_id=?', [$owned]);
+        try { A::handle('projectDelete', ['project_id'=>$id]); throw new RuntimeException('Queued work deleted'); }
+        catch (InvalidArgumentException) {}
+        check(\app\model\Project::find($id) !== null);
+        S::run("UPDATE jobs SET status='done' WHERE chat_id=?", [$owned]);
+        S::run("UPDATE chats SET status='running' WHERE id=?", [$owned]);
+        try { A::handle('projectDelete', ['project_id'=>$id]); throw new RuntimeException('Active chat deleted'); }
+        catch (InvalidArgumentException) {}
+        S::run("UPDATE chats SET status='idle' WHERE id=?", [$owned]);
+        S::run('INSERT INTO approvals (chat_id,rpc_id,method,details) VALUES (?,?,?,?)', [$owned,'1','test','{}']);
+        A::handle('projectDelete', ['project_id'=>$id]);
+        check(\app\model\Project::find($id) === null && \app\model\Chat::find($owned) === null);
+        foreach (['messages','jobs','approvals','events'] as $table) check(!S::all("SELECT * FROM $table WHERE chat_id=?", [$owned]));
+        check(\app\model\Chat::find($participantsChat) !== null);
+        check(file_get_contents($workspace.'/Folder name/keep.txt') === 'keep');
+        check(S::all('PRAGMA foreign_key_check') === []);
+        unlink($workspace.'/Folder name/keep.txt');
     } finally {
         rmdir($workspace.'/Folder name'); rmdir($workspace);
         putenv($previousRoot === false ? 'CRABASE_WORKSPACE_ROOT' : 'CRABASE_WORKSPACE_ROOT='.$previousRoot);

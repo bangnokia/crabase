@@ -2,6 +2,8 @@
 namespace app\service;
 
 use InvalidArgumentException;
+use app\model\{Account, User};
+use support\Db;
 
 final class OAuth
 {
@@ -25,8 +27,9 @@ final class OAuth
         $state = bin2hex(random_bytes(32));
         $browser = bin2hex(random_bytes(32));
         $verifier = bin2hex(random_bytes(32));
-        Store::run('DELETE FROM oauth_flows WHERE expires<?',[time()],false);
-        Store::run('INSERT INTO oauth_flows VALUES (?,?,?,?)',[hash('sha256',$state),hash('sha256',$browser),$verifier,time()+600],false);
+        Store::db();
+        Db::table('oauth_flows')->where('expires', '<', time())->delete();
+        Db::table('oauth_flows')->insert(['state_hash'=>hash('sha256',$state), 'browser_hash'=>hash('sha256',$browser), 'verifier'=>$verifier, 'expires'=>time()+600]);
         $url = self::PROVIDER.'/oauth/authorize?'.http_build_query([
             'client_id'=>getenv('CRABASE_OAUTH_CLIENT_ID'), 'redirect_uri'=>self::redirectUri(),
             'response_type'=>'code', 'state'=>$state,
@@ -40,9 +43,9 @@ final class OAuth
     {
         if (!preg_match('/^[a-f0-9]{64}$/D',$state) || !preg_match('/^[a-f0-9]{64}$/D',$browser)) throw new InvalidArgumentException('Invalid OAuth session. Please try again.');
         $key = hash('sha256',$state);
-        $statement = Store::db()->prepare('DELETE FROM oauth_flows WHERE state_hash=? AND browser_hash=? AND expires>? RETURNING verifier');
-        $statement->execute([$key,hash('sha256',$browser),time()]);
-        $verifier = $statement->fetchColumn();
+        Store::db();
+        // One statement consumes state exactly once; separate model read/delete is replayable.
+        $verifier = Db::selectOne('DELETE FROM oauth_flows WHERE state_hash=? AND browser_hash=? AND expires>? RETURNING verifier', [$key,hash('sha256',$browser),time()])?->verifier;
         if (!$verifier) throw new InvalidArgumentException('OAuth session expired or was already used. Please try again.');
         return $verifier;
     }
@@ -69,10 +72,12 @@ final class OAuth
     }
     public static function account(array $profile): string
     {
+        Store::db();
         $subject = $profile['id'] ?? null;
         if ((!is_string($subject) && !is_int($subject)) || (string)$subject === '' || strlen((string)$subject)>200) throw new InvalidArgumentException('OAuth provider did not return a valid user ID.');
         $subject = (string)$subject;
-        $linked = Store::all('SELECT a.user_id,a.enabled FROM oauth_identities o JOIN accounts a ON a.user_id=o.user_id WHERE o.provider=? AND o.subject=?',[self::PROVIDER,$subject])[0] ?? null;
+        $linked = Account::query()->from('accounts as a')->join('oauth_identities as o', 'o.user_id', '=', 'a.user_id')
+            ->where('o.provider', self::PROVIDER)->where('o.subject', $subject)->first(['a.user_id','a.enabled']);
         if ($linked) {
             if (!$linked['enabled']) throw new InvalidArgumentException('Your account is disabled. Contact your administrator.');
             return $linked['user_id'];
@@ -81,11 +86,21 @@ final class OAuth
         $verified = ($profile['email_verified'] ?? null) === true ||
             (is_string($profile['email_verified_at'] ?? null) && strtotime($profile['email_verified_at']) !== false);
         if (!$verified || !is_string($email) || !filter_var($email,FILTER_VALIDATE_EMAIL)) throw new InvalidArgumentException('A verified email is required to link your account. Use password login or contact your administrator.');
-        return \support\Db::transaction(function () use ($email,$subject) {
-            $account = Store::all('SELECT user_id FROM accounts WHERE email=? AND enabled=1',[strtolower(trim($email))])[0] ?? null;
-            if (!$account) throw new InvalidArgumentException('No enabled Crabase account matches your email. Ask your administrator to create one.');
-            if (Store::all('SELECT 1 FROM oauth_identities WHERE provider=? AND user_id=?',[self::PROVIDER,$account['user_id']])) throw new InvalidArgumentException('This account is already linked to another provider identity.');
-            Store::run('INSERT INTO oauth_identities VALUES (?,?,?)',[self::PROVIDER,$subject,$account['user_id']],false);
+        return \support\Db::transaction(function () use ($email,$subject,$profile) {
+            $account = Account::query()->where('email', strtolower(trim($email)))->first(['user_id','enabled']);
+            if ($account && !$account->enabled) throw new InvalidArgumentException('Your account is disabled. Contact your administrator.');
+            if (!$account) {
+                $name = is_string($profile['name'] ?? null) ? $profile['name'] : '';
+                $name = preg_match('//u', $name) ? trim(preg_replace('/[\x00-\x1f\x7f<>]/u', '', $name)) : '';
+                $name = mb_strcut($name ?: explode('@', $email)[0], 0, 80, 'UTF-8');
+                if (User::query()->where('name', $name)->exists()) $name .= '-'.bin2hex(random_bytes(4));
+                // Passport users have no known local password; an admin can set one later.
+                $created = Auth::create(['name'=>$name, 'email'=>$email, 'password'=>bin2hex(random_bytes(32)), 'admin'=>false]);
+                $account = Account::query()->findOrFail($created['id']);
+            }
+            // Composite-key identity bindings are query-builder records, not mutable model instances.
+            if (Db::table('oauth_identities')->where('provider', self::PROVIDER)->where('user_id', $account['user_id'])->exists()) throw new InvalidArgumentException('This account is already linked to another provider identity.');
+            Db::table('oauth_identities')->insert(['provider'=>self::PROVIDER, 'subject'=>$subject, 'user_id'=>$account['user_id']]);
             return $account['user_id'];
         });
     }

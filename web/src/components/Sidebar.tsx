@@ -20,6 +20,8 @@ import { clampSidebarWidth } from "../lib/layout";
 import { sortProjects, type ProjectSort } from "../lib/projects";
 type Props = {
   projects: Project[];
+  pins: string[];
+  pinProject: (project: Project) => void;
   admin: boolean;
   chats: Chat[];
   selected: string;
@@ -32,6 +34,7 @@ type Props = {
   newChat: (project?: string) => void;
   showDialog: (dialog: "search" | "project" | "settings") => void;
   archive: (chat: Chat) => void;
+  manageProject: (project: Project, action: "projectArchive" | "projectDelete") => void;
 };
 function ChatLink({
   chat,
@@ -104,6 +107,8 @@ function ChatLink({
 }
 export function Sidebar({
   projects,
+  pins,
+  pinProject,
   admin,
   chats,
   selected,
@@ -116,12 +121,86 @@ export function Sidebar({
   newChat,
   showDialog,
   archive,
+  manageProject,
 }: Props) {
+  const [showArchived, setShowArchived] = useState(false);
   const [width, setWidth] = useState(232);
   const [showAll, setShowAll] = useState<string[]>([]);
   const [projectSort, setProjectSort] = useState<ProjectSort>("created");
   const dragOffset = useRef(0);
   const { collapsed, projectsOpen, toggleProjects, toggleProject } = useProjectExpansion();
+  const visibleProjects = sortProjects(projects.filter((project) => showArchived || !project.archived), chats, projectSort);
+  const pinnedProjects = visibleProjects.filter((project) => pins.includes(project.id));
+  const renderProjects = (items: Project[]) => items.map((project) => {
+    const expanded = !collapsed.includes(project.id);
+    const projectChats = chats.filter(
+      (chat) => chat.project_id === project.id && !chat.archived,
+    );
+    return (
+      <section
+        className="project-group"
+        key={project.id}
+        aria-label={project.name}
+      >
+        <div className="project-row">
+          <button
+            className="project-label"
+            aria-expanded={expanded}
+            aria-controls={`project-${project.id}`}
+            onClick={() => toggleProject(project.id)}
+          >
+            {expanded ? (
+              <FolderOpen size={16} />
+            ) : (
+              <Folder size={16} />
+            )}
+            <span className="truncate" title={project.name}>{project.name}{project.archived ? " · Archived" : ""}</span>
+          </button>
+          <Menu viewport label={`Project options for ${project.name}`} icon={<MoreHorizontal size={14} />}>
+            <MenuItem onClick={() => pinProject(project)}>
+              {pins.includes(project.id) ? "Unpin" : "Pin"}
+            </MenuItem>
+            {admin && <><MenuItem onClick={() => manageProject(project, "projectArchive")}>
+              {project.archived ? "Restore" : "Archive"}
+            </MenuItem>
+            <MenuItem onClick={() => manageProject(project, "projectDelete")}>Delete</MenuItem></>}
+          </Menu>
+          <IconButton
+            label={`New chat in ${project.name}`}
+            onClick={() => newChat(project.id)}
+          >
+            <Plus size={13} />
+          </IconButton>
+        </div>
+        {expanded && (
+          <div
+            id={`project-${project.id}`}
+            className="project-chats"
+          >
+            {projectChats
+              .slice(0, showAll.includes(project.id) ? undefined : 5)
+              .map((chat) => (
+                <ChatLink
+                  key={chat.id}
+                  {...{ chat, selected, avatars, open, archive }}
+                />
+              ))}
+            {projectChats.length > 5 &&
+              !showAll.includes(project.id) && (
+                <button
+                  className="load-more"
+                  onClick={() =>
+                    setShowAll((ids) => [...ids, project.id])
+                  }
+                >
+                  Load more ({projectChats.length - 5})
+                </button>
+              )}
+          </div>
+        )}
+      </section>
+    );
+  });
   return (
     <>
       <button
@@ -156,6 +235,10 @@ export function Sidebar({
           </button>
         </nav>
         <div className="sidebar-scroll">
+          {pinnedProjects.length > 0 && <section aria-label="Pins">
+            <div className="section-label">Pins</div>
+            {renderProjects(pinnedProjects)}
+          </section>}
           <div className="section-label">
             <button
               aria-expanded={projectsOpen}
@@ -182,6 +265,9 @@ export function Sidebar({
                     {label}
                   </MenuItem>
                 ))}
+                <MenuItem selected={showArchived} onClick={() => setShowArchived((value) => !value)}>
+                  Show archived projects
+                </MenuItem>
               </Menu>
               {admin && <IconButton
                 label="Add project"
@@ -193,67 +279,7 @@ export function Sidebar({
           </div>
           {projectsOpen && (
             <div id="project-list">
-              {sortProjects(projects, chats, projectSort).map((project) => {
-                const expanded = !collapsed.includes(project.id);
-                const projectChats = chats.filter(
-                  (chat) => chat.project_id === project.id && !chat.archived,
-                );
-                return (
-                  <section
-                    className="project-group"
-                    key={project.id}
-                    aria-label={project.name}
-                  >
-                    <div className="project-row">
-                      <button
-                        className="project-label"
-                        aria-expanded={expanded}
-                        aria-controls={`project-${project.id}`}
-                        onClick={() => toggleProject(project.id)}
-                      >
-                        {expanded ? (
-                          <FolderOpen size={16} />
-                        ) : (
-                          <Folder size={16} />
-                        )}
-                        <span className="truncate">{project.name}</span>
-                      </button>
-                      <IconButton
-                        label={`New chat in ${project.name}`}
-                        onClick={() => newChat(project.id)}
-                      >
-                        <Plus size={15} />
-                      </IconButton>
-                    </div>
-                    {expanded && (
-                      <div
-                        id={`project-${project.id}`}
-                        className="project-chats"
-                      >
-                        {projectChats
-                          .slice(0, showAll.includes(project.id) ? undefined : 5)
-                          .map((chat) => (
-                            <ChatLink
-                              key={chat.id}
-                              {...{ chat, selected, avatars, open, archive }}
-                            />
-                          ))}
-                        {projectChats.length > 5 &&
-                          !showAll.includes(project.id) && (
-                            <button
-                              className="load-more"
-                              onClick={() =>
-                                setShowAll((ids) => [...ids, project.id])
-                              }
-                            >
-                              Load more ({projectChats.length - 5})
-                            </button>
-                          )}
-                      </div>
-                    )}
-                  </section>
-                );
-              })}
+              {renderProjects(visibleProjects.filter((project) => !pins.includes(project.id)))}
             </div>
           )}
           <div className="section-label">Chats</div>
@@ -272,7 +298,7 @@ export function Sidebar({
             onClick={() => showDialog("settings")}
           >
             <Avatar user={name} avatars={avatars} />
-            <span>{name}</span>
+            <span className="truncate" title={name}>{name}</span>
           </button>
           <IconButton label="Search chats" onClick={() => showDialog("search")}>
             <Search size={17} />

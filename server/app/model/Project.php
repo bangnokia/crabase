@@ -10,7 +10,7 @@ final class Project extends Model
     public $timestamps = false;
     public $incrementing = false;
     protected $keyType = 'string';
-    protected $fillable = ['id', 'name', 'path'];
+    protected $fillable = ['id', 'name', 'path', 'archived'];
 
     public function chats(): \Illuminate\Database\Eloquent\Relations\HasMany
     {

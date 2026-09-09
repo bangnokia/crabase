@@ -38,7 +38,7 @@ try {
     $chatB = Actions::handle('create', ['title'=>'B'])['id'];
     $chatC = Actions::handle('create', ['title'=>'C'])['id'];
     // Reuse a fixture directory instead of creating scratch folders in the real runtime.
-    Store::run('INSERT INTO projects VALUES (?,?,?)', ['fixture','Fixture',$directory]);
+    Store::run('INSERT INTO projects (id,name,path) VALUES (?,?,?)', ['fixture','Fixture',$directory]);
     Store::run('UPDATE chats SET project_id=?', ['fixture']);
     foreach ([[$chatA,'A first'],[$chatA,'A second'],[$chatB,'B first'],[$chatC,'C first']] as [$chat,$prompt]) {
         Store::run('INSERT INTO jobs (chat_id,prompt) VALUES (?,?)', [$chat,$prompt]);

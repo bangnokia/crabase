@@ -80,6 +80,38 @@ if __name__=='__main__':
     second.call('usersList',error=True)
     second.call('projectFolders',error=True)
     second.call('project',{'path':'/'},error=True)
+    # Disposable project: verify management permissions and deletion pushes to an open subscriber.
+    with tempfile.TemporaryDirectory(prefix='crabase-delete-') as temp:
+        project_id=uuid.uuid4().hex[:16]
+        keep=Path(temp)/'keep.txt'; keep.write_text('keep')
+        subprocess.run(['php','-r',"require 'vendor/autoload.php'; app\\service\\Store::run('INSERT INTO projects (id,name,path) VALUES (?,?,?)', [$argv[1],'Delete check',$argv[2]]);",project_id,temp],cwd=server,check=True)
+        owned=first.call('create',{'project_id':project_id})['id']
+        first.call('message',{'chat_id':owned,'body':'Delete fixture','mode':'note'})
+        second.call('sync',{'chat_id':owned})
+        second.call('projectArchive',{'project_id':project_id,'archived':True},error=True)
+        second.call('projectDelete',{'project_id':project_id},error=True)
+        second.events.clear()
+        second.call('projectPin',{'project_id':project_id,'pinned':True,'user_id':accounts[0]['id']})
+        assert project_id in second.patch('state')['state']['pins']
+        assert project_id not in first.call('sync')['state']['pins']
+        second.close(); second=Client(cookie=cookies[1])
+        assert project_id in second.call('sync')['state']['pins']
+        second.call('projectPin',{'project_id':project_id,'pinned':False})
+        assert project_id not in second.call('sync')['state']['pins']
+        second.call('projectPin',{'project_id':project_id,'pinned':'true'},error=True)
+        second.call('projectPin',{'project_id':'missing','pinned':True},error=True)
+        second.call('projectPin',{'project_id':project_id,'pinned':True})
+        first.call('projectArchive',{'project_id':project_id,'archived':True})
+        assert next(p for p in second.call('sync')['state']['projects'] if p['id']==project_id)['archived']==1
+        first.call('projectArchive',{'project_id':project_id,'archived':False})
+        second.call('sync',{'chat_id':owned}); second.events.clear()
+        first.call('projectDelete',{'project_id':project_id})
+        pushed=second.patch('state')['state']
+        assert all(p['id']!=project_id for p in pushed['projects'])
+        assert all(c['id']!=owned for c in pushed['chats'])
+        assert project_id not in pushed['pins']
+        assert keep.read_text()=='keep'
+        first.call('sync',{'chat_id':owned},error=True)
     state=first.call('sync')['state']; users={u['name']:u['id'] for u in state['users']}; assert state['projects'] and state['chats']
     workspace=first.call('projectWorkspace', {'project_id':state['projects'][0]['id']})
     assert set(workspace)=={'paths','git','branch','changes'}

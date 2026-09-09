@@ -16,3 +16,9 @@ test("projects sort by latest chat, name, or creation order", () => {
   assert.deepEqual(sortProjects(projects, chats, "name").map((p) => p.id), ["a", "b"]);
   assert.deepEqual(sortProjects(projects, chats, "created").map((p) => p.id), ["a", "b"]);
 });
+
+test("project menus stay inside narrow viewports and flip above near the bottom", async () => {
+  const { menuPosition } = await import("../src/lib/layout.ts");
+  assert.deepEqual(menuPosition({ left: 140, right: 164, top: 40, bottom: 64 }, { width: 184, height: 100 }, { width: 390, height: 800 }), { left: 8, top: 68 });
+  assert.deepEqual(menuPosition({ left: 370, right: 394, top: 750, bottom: 774 }, { width: 184, height: 100 }, { width: 390, height: 800 }), { left: 198, top: 646 });
+});

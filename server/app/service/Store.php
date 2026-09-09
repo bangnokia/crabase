@@ -36,8 +36,9 @@ final class Store
             self::notify();
         }
     }
-    public static function notify(): void
+    public static function notify(int $affected = 1): void
     {
+        if (!$affected) return;
         self::db()->exec("INSERT INTO settings VALUES ('revision','1') ON CONFLICT(key) DO UPDATE SET value=CAST(value AS INTEGER)+1");
     }
     public static function text(mixed $value, int $max = 20000): string
@@ -69,14 +70,16 @@ final class Store
     }
     public static function snapshot(): array
     {
-        $chats = self::all("SELECT c.*, p.name AS project_name,
-            (SELECT json_group_array(DISTINCT author) FROM messages m WHERE m.chat_id=c.id AND m.role IN ('user','note')) AS participants
-            FROM chats c LEFT JOIN projects p ON p.id=c.project_id ORDER BY updated_at DESC, c.rowid DESC");
+        self::db();
+        $chats = Chat::query()->from('chats as c')->select('c.*', 'p.name as project_name')
+            ->selectSub(Message::query()->selectRaw('json_group_array(DISTINCT author)')->whereColumn('chat_id', 'c.id')->whereIn('role', ['user','note']), 'participants')
+            ->leftJoin('projects as p', 'p.id', '=', 'c.project_id')->orderByDesc('c.updated_at')->orderByDesc('c.rowid')->get()->toArray();
         foreach ($chats as &$chat) {
             $chat['participants'] = json_decode($chat['participants'], true);
         }
         unset($chat);
-        $users = self::all('SELECT u.id,u.name,u.avatar_url,u.created_at,a.email FROM users u LEFT JOIN accounts a ON a.user_id=u.id ORDER BY u.name');
+        $users = User::query()->from('users as u')->leftJoin('accounts as a', 'a.user_id', '=', 'u.id')
+            ->orderBy('u.name')->get(['u.id','u.name','u.avatar_url','u.created_at','a.email'])->toArray();
         foreach ($users as &$user) {
             if (!$user['avatar_url'] && $user['email']) $user['avatar_url'] = Auth::avatar($user['email']);
             unset($user['email']);
@@ -86,9 +89,9 @@ final class Store
             'users' => $users,
             'agentName' => self::agentName(),
             'models' => json_decode(Setting::query()->whereKey('models')->value('value') ?? '[]', true),
-            'projects' => self::all('SELECT *, rowid AS created_order FROM projects'),
+            'projects' => Project::query()->select('*')->selectRaw('rowid AS created_order')->get()->toArray(),
             'chats' => $chats,
-            'events' => self::all('SELECT e.*, c.title FROM events e LEFT JOIN chats c ON c.id=e.chat_id ORDER BY e.id DESC LIMIT 50'),
+            'events' => Event::query()->from('events as e')->leftJoin('chats as c', 'c.id', '=', 'e.chat_id')->orderByDesc('e.id')->limit(50)->get(['e.*','c.title'])->toArray(),
             'runtime' => Setting::query()->whereKey('runtime')->value('value') ?? 'offline',
         ];
     }

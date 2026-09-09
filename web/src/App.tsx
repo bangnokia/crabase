@@ -1,3 +1,4 @@
+import type { Project } from "./types";
 import { ProjectDialog } from "./components/ProjectDialog";
 import { useAuth } from "./components/AuthGate";
 import { useEffect, useRef, useState } from "react";
@@ -20,6 +21,9 @@ import { ChatPage } from "./pages/ChatPage";
 export function App() {
   const { user } = useAuth();
   const { route, navigate } = useRoute();
+  useEffect(() => {
+    if (user.avatar_required && route.page !== 'settings') navigate('/settings');
+  }, [user.avatar_required, route.page, navigate]);
   const selected = route.page === "chat" ? route.id : "";
   const workspace = useWorkspace(selected);
   const { data, live, loaded, messages, approvals, error, setError, request } =
@@ -168,6 +172,18 @@ export function App() {
     if (await act("archive", { chat_id: target.id, archived: !target.archived }))
       setToast(target.archived ? "Chat restored" : "Chat archived");
   }
+  async function manageProject(target: Project, action: "projectArchive" | "projectDelete") {
+    if (action === "projectDelete" && !window.confirm(
+      `Delete "${target.name}" and all its chats? This permanently removes their database records. Local folders and files will be kept.`,
+    )) return;
+    if (await act(action, { project_id: target.id, archived: !target.archived })) {
+      setToast(action === "projectDelete" ? "Project deleted" : target.archived ? "Project restored" : "Project archived");
+    }
+  }
+  useEffect(() => {
+    if (loaded && projectId && !data.projects.some((item) => item.id === projectId)) setProjectId("");
+    if (loaded && selected && !data.chats.some((item) => item.id === selected)) newChat();
+  }, [loaded, data.projects, data.chats, selected, projectId]);
   const composer = (
     <Composer
       {...{
@@ -188,7 +204,7 @@ export function App() {
       restore={() => void archive()}
     />
   );
-  if (route.page === "settings") return <main className="settings-shell">
+  if (route.page === "settings" || user.avatar_required) return <main className="settings-shell">
     <SettingsPage request={request} back={() => navigate('/')} {...preferences} />
   </main>;
   return (
@@ -199,6 +215,8 @@ export function App() {
       <Sidebar
         admin={!!user.admin}
         projects={data.projects}
+        pins={data.pins}
+        pinProject={(target) => void act("projectPin", { project_id: target.id, pinned: !data.pins.includes(target.id) })}
         chats={data.chats}
         selected={selected}
         name={preferences.name}
@@ -216,6 +234,7 @@ export function App() {
           else setDialog(value);
         }}
         archive={(target) => void archive(target)}
+        manageProject={(target, action) => void manageProject(target, action)}
       />
       <main className="main-panel" id="main-content" tabIndex={-1}>
         <Header

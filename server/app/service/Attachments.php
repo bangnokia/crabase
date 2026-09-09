@@ -1,5 +1,6 @@
 <?php
 namespace app\service;
+use app\model\{Upload, Message};
 
 final class Attachments
 {
@@ -19,7 +20,8 @@ final class Attachments
 
     public static function cleanup(): void
     {
-        foreach (Store::all('SELECT id FROM uploads WHERE expires < ? LIMIT 100', [time()]) as $row) {
+        Store::db();
+        foreach (Upload::query()->where('expires', '<', time())->limit(100)->get(['id']) as $row) {
             self::remove($row['id']);
         }
     }
@@ -28,7 +30,7 @@ final class Attachments
     {
         $path = self::path($id);
         if (is_file($path) && !unlink($path)) throw new \RuntimeException('Could not remove upload.');
-        Store::run('DELETE FROM uploads WHERE id=?', [$id], false);
+        Upload::query()->whereKey($id)->delete();
     }
 
     public static function handle(string $action, array $data): array
@@ -42,13 +44,13 @@ final class Attachments
             if (!is_int($size) || $size < 1 || $size > self::MAX_SIZE) throw new \InvalidArgumentException('Files must be between 1 byte and 5 MB.');
             $id = bin2hex(random_bytes(16));
             \support\Db::transaction(function () use ($id, $user, $name, $size) {
-                if (count(Store::all('SELECT id FROM uploads WHERE user_id=?', [$user])) >= 30) throw new \InvalidArgumentException('Too many pending uploads. Remove unused attachments or wait for them to expire.');
-                Store::run('INSERT INTO uploads (id,user_id,name,size,expires) VALUES (?,?,?,?,?)', [$id,$user,$name,$size,time()+86400], false);
+                if (Upload::query()->where('user_id', $user)->count() >= 30) throw new \InvalidArgumentException('Too many pending uploads. Remove unused attachments or wait for them to expire.');
+                Upload::query()->create(['id'=>$id, 'user_id'=>$user, 'name'=>$name, 'size'=>$size, 'expires'=>time()+86400]);
             });
             return ['id'=>$id];
         }
         $id = Store::text($data['id'] ?? null, 32);
-        $row = Store::all('SELECT * FROM uploads WHERE id=? AND user_id=? AND expires>=?', [$id,$user,time()])[0] ?? null;
+        $row = Upload::query()->whereKey($id)->where('user_id', $user)->where('expires', '>=', time())->first();
         if (!$row) throw new \InvalidArgumentException('Upload expired or unavailable. Please attach the file again.');
         if ($action === 'uploadRemove') {
             self::remove($id);
@@ -74,7 +76,7 @@ final class Attachments
                 throw new \InvalidArgumentException('Invalid image or image exceeds 40 megapixels.');
             }
         }
-        Store::run('UPDATE uploads SET received=?,mime=? WHERE id=?', [$received,$mime,$id], false);
+        $row->update(['received'=>$received, 'mime'=>$mime]);
         return ['received'=>$received, 'mime'=>$mime];
     }
 
@@ -85,11 +87,34 @@ final class Attachments
         foreach ($ids as $id) {
             $id = Store::text($id, 32);
             if (isset($files[$id])) throw new \InvalidArgumentException('Duplicate attachment.');
-            $row = Store::all('SELECT * FROM uploads WHERE id=? AND user_id=? AND received=size AND mime IS NOT NULL AND expires>=?', [$id,$user,time()])[0] ?? null;
+            $row = Upload::query()->whereKey($id)->where('user_id', $user)->whereColumn('received', 'size')->whereNotNull('mime')->where('expires', '>=', time())->first();
             if (!$row || !is_file(self::path($id))) throw new \InvalidArgumentException('Attachment is not ready or has expired. Please attach it again.');
-            $files[$id] = $row;
+            $files[$id] = $row->toArray();
         }
         return array_values($files);
+    }
+
+    public static function saveAvatar(array $data): array
+    {
+        $user = Store::text($data['user_id'] ?? null, 64);
+        $file = self::pending([$data['id'] ?? null], $user)[0];
+        $source = self::path($file['id']);
+        $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($source);
+        $extension = ['image/png'=>'png','image/jpeg'=>'jpg','image/gif'=>'gif','image/webp'=>'webp'][$mime] ?? null;
+        $dimensions = @getimagesize($source);
+        if (!$extension || !$dimensions || $dimensions[0] * $dimensions[1] > 40000000) throw new \InvalidArgumentException('Upload a PNG, JPEG, GIF or WebP image (up to 40 megapixels).');
+        $name = $file['id'].'.'.$extension;
+        $target = Avatars::directory().'/'.$name;
+        if (file_exists($target) || !rename($source, $target)) throw new \RuntimeException('Could not save avatar.');
+        $url = '/auth/avatars/'.$name;
+        try {
+            \support\Db::transaction(function () use ($user, $file, $url) {
+                if (!\app\model\User::query()->whereKey($user)->update(['avatar_url'=>$url])) throw new \InvalidArgumentException('User not found.');
+                Upload::query()->whereKey($file['id'])->delete();
+                Store::notify();
+            });
+        } catch (\Throwable $error) { rename($target, $source); throw $error; }
+        return ['avatar_url'=>$url];
     }
 
     // Rename, rather than copy, so each attachment has a single stored file.
@@ -117,7 +142,7 @@ final class Attachments
     public static function input(array $job): array
     {
         $items = [];
-        $files = empty($job['message_id']) ? [] : json_decode(Store::all('SELECT attachments FROM messages WHERE id=? AND chat_id=?', [$job['message_id'],$job['chat_id']])[0]['attachments'] ?? '[]', true);
+        $files = empty($job['message_id']) ? [] : (Message::query()->whereKey($job['message_id'])->where('chat_id', $job['chat_id'])->first(['attachments'])?->attachments ?? []);
         $context = [];
         foreach ($files as $file) {
             $resolved = Artifacts::resolve($job['chat_id'], $file['stored']);

@@ -4,6 +4,7 @@ namespace app\process;
 
 use app\service\Store;
 use app\service\Auth;
+use app\model\{Job, Chat, Message, Approval, Setting};
 use Workerman\Timer;
 use Workerman\Worker;
 use Workerman\Connection\TcpConnection;
@@ -36,19 +37,19 @@ final class Codex
     {
         $this->worker = $worker;
         Store::db();
-        Store::run("UPDATE jobs SET status='failed' WHERE status='running'");
-        Store::run("UPDATE chats SET status='idle' WHERE status IN ('running','approval')");
-        Store::run("UPDATE approvals SET decision='decline' WHERE decision IS NULL");
-        foreach (Store::all("SELECT id,body FROM messages WHERE role='agent_activity'") as $row) {
+        Store::notify(Job::query()->where('status', 'running')->update(['status'=>'failed']));
+        Store::notify(Chat::query()->whereIn('status', ['running','approval'])->update(['status'=>'idle']));
+        Store::notify(Approval::query()->whereNull('decision')->update(['decision'=>'decline']));
+        foreach (Message::query()->where('role', 'agent_activity')->get(['id','body']) as $row) {
             $activity = json_decode($row['body'], true);
             if (!empty($activity['active'])) {
-                Store::run('UPDATE messages SET body=? WHERE id=?', [json_encode(\app\service\AgentActivity::finish($activity), JSON_INVALID_UTF8_SUBSTITUTE), $row['id']]);
+                Store::notify($row->update(['body'=>json_encode(\app\service\AgentActivity::finish($activity), JSON_INVALID_UTF8_SUBSTITUTE)]));
             }
         }
         $this->status('ready');
         \app\service\Attachments::cleanup();
         Timer::add(3600, fn () => \app\service\Attachments::cleanup());
-        Store::run("INSERT INTO settings VALUES ('models','[]') ON CONFLICT(key) DO UPDATE SET value='[]'");
+        Setting::put('models', '[]');
         // One persistent app-server, with independent turns for different chats.
         Timer::add(0.05, function () {
             $this->tick();
@@ -122,6 +123,7 @@ final class Codex
                 $chatId = empty($m['data']['chat_id']) ? null : Store::text($m['data']['chat_id'], 64);
                 $thread = $chatId ? Store::thread($chatId) : null;
                 $state = Store::snapshot();
+                $state['pins'] = \app\model\User::findOrFail($actor['id'])->pinnedProjects()->pluck('projects.id')->all();
                 $this->clients[$connection->id] = ['token'=>$this->clients[$connection->id]['token'], 'chat_id' => $chatId,'state' => $state,'thread' => $thread];
                 $result = ['state' => $state,'thread' => $thread,'terminals' => $this->terminalList($chatId)];
             } elseif (str_starts_with($m['action'], 'terminal')) {
@@ -130,9 +132,9 @@ final class Codex
                 $m['data']['user_id'] = $actor['id'];
                 $result = match ($m['action']) {
                     'profile' => ['user'=>$actor],
-                    'project', 'projectFolders' => $actor['admin']
+                    'project', 'projectFolders', 'projectArchive', 'projectDelete' => $actor['admin']
                         ? \app\service\Actions::handle($m['action'], $m['data'])
-                        : throw new \InvalidArgumentException('Administrator access required to create projects.'),
+                        : throw new \InvalidArgumentException('Administrator access required to manage projects.'),
                     'profileSave' => Auth::update($actor, $m['data'], false),
                     'usersList' => ['users'=>Auth::users($actor)],
                     'userCreate' => $actor['admin'] ? Auth::create($m['data']) : throw new \InvalidArgumentException('Administrator access required.'),
@@ -152,7 +154,7 @@ final class Codex
     // ponytail: compare subscribed history rows; use database cursors if long histories make this slow.
     private function publish(): void
     {
-        $revision = Store::all("SELECT value FROM settings WHERE key='revision'")[0]['value'] ?? '';
+        $revision = Setting::query()->whereKey('revision')->value('value') ?? '';
         if ($revision === $this->revision) {
             return;
         }
@@ -160,7 +162,7 @@ final class Codex
         $state = Store::snapshot();
         $threads = [];
         foreach ($this->clients as $id => &$client) {
-            if (!Auth::user($client['token'])) {
+            if (!$actor = Auth::user($client['token'])) {
                 if (isset($this->worker->connections[$id])) {
                     $this->reply($this->worker->connections[$id], ['type'=>'unauthorized']);
                     $this->worker->connections[$id]->close();
@@ -170,6 +172,7 @@ final class Codex
             if ($client['state'] === null) {
                 continue;
             }
+            $state['pins'] = \app\model\User::findOrFail($actor['id'])->pinnedProjects()->pluck('projects.id')->all();
             $patch = ['type' => 'patch'];
             foreach ($state as $key => $value) {
                 if ($value !== $client['state'][$key]) {
@@ -177,6 +180,10 @@ final class Codex
                 }
             }
             $client['state'] = $state;
+            if ($client['chat_id'] && !in_array($client['chat_id'], array_column($state['chats'], 'id'), true)) {
+                $client['chat_id'] = null;
+                $client['thread'] = null;
+            }
             if ($chatId = $client['chat_id']) {
                 $thread = $threads[$chatId] ??= Store::thread($chatId);
                 $old = array_column($client['thread']['messages'], null, 'id');
@@ -211,7 +218,7 @@ final class Codex
 
     private function status(string $value): void
     {
-        Store::run("INSERT INTO settings VALUES ('runtime',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", [$value]);
+        Setting::put('runtime', $value);
     }
     private function send(array $message): void
     {
@@ -256,7 +263,7 @@ final class Codex
                 $this->loadModels($result['nextCursor'], $models);
                 return;
             }
-            Store::run("INSERT INTO settings VALUES ('models',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", [json_encode($models, JSON_INVALID_UTF8_SUBSTITUTE)]);
+            Setting::put('models', json_encode($models, JSON_INVALID_UTF8_SUBSTITUTE));
         });
     }
     private function tick(): void
@@ -300,23 +307,24 @@ final class Codex
             }
             foreach (array_keys($this->jobs) as $jobId) {
                 foreach ($this->jobs[$jobId]['approvals'] as $approvalId => $rpcId) {
-                    $decision = Store::all('SELECT decision FROM approvals WHERE id=?', [$approvalId])[0]['decision'] ?? null;
+                    $decision = Approval::query()->whereKey($approvalId)->value('decision');
                     if ($decision) {
                         $this->send(['id' => $rpcId,'result' => ['decision' => $decision]]);
                         unset($this->jobs[$jobId]['approvals'][$approvalId]);
                         if (!$this->jobs[$jobId]['approvals']) {
-                            Store::run("UPDATE chats SET status='running' WHERE id=?", [$this->jobs[$jobId]['chat_id']]);
+                            Store::notify(Chat::query()->whereKey($this->jobs[$jobId]['chat_id'])->update(['status'=>'running']));
                         }
                     }
                 }
-                $row = Store::all('SELECT cancel,turn_id FROM jobs WHERE id=?', [$jobId])[0];
+                $row = Job::query()->findOrFail($jobId, ['cancel','turn_id']);
                 if ($row['cancel'] && !empty($row['turn_id']) && empty($this->jobs[$jobId]['interrupting'])) {
                     $this->jobs[$jobId]['interrupting'] = true;
                     $this->rpc('turn/interrupt', ['threadId' => $this->jobs[$jobId]['thread_id'],'turnId' => $row['turn_id']], fn ($result) => null, $jobId);
                 }
             }
-            Store::run("UPDATE jobs SET status='cancelled' WHERE status='queued' AND cancel=1");
-            Store::run("UPDATE chats SET status='idle' WHERE status='queued' AND NOT EXISTS (SELECT 1 FROM jobs WHERE jobs.chat_id=chats.id AND jobs.status IN ('queued','running'))");
+            Store::notify(Job::query()->where('status', 'queued')->where('cancel', 1)->update(['status'=>'cancelled']));
+            Store::notify(Chat::query()->where('status', 'queued')
+                ->whereDoesntHave('jobs', fn ($query) => $query->whereIn('status', ['queued','running']))->update(['status'=>'idle']));
             $limit = (require dirname(__DIR__, 2).'/config/crabase.php')['parallel_chats'];
             if (count($this->jobs) >= $limit) {
                 return;
@@ -350,20 +358,15 @@ final class Codex
 
     private function nextJobs(int $limit): array
     {
-        return Store::all("SELECT j.*, c.thread_id, p.path FROM jobs j
-            JOIN chats c ON c.id=j.chat_id LEFT JOIN projects p ON p.id=c.project_id
-            WHERE j.status='queued' AND j.cancel=0
-            AND NOT EXISTS (SELECT 1 FROM jobs active WHERE active.chat_id=j.chat_id AND active.status='running')
-            AND NOT EXISTS (SELECT 1 FROM jobs earlier WHERE earlier.chat_id=j.chat_id AND earlier.status='queued' AND earlier.cancel=0 AND earlier.id<j.id)
-            ORDER BY j.id LIMIT ?", [$limit]);
+        return Job::nextQueued($limit);
     }
 
     private function startJob(array $next): void
     {
         $jobId = (int)$next['id'];
         $this->jobs[$jobId] = $next + ['items' => [], 'approvals' => [], 'activity' => []];
-        Store::run("UPDATE jobs SET status='running' WHERE id=?", [$jobId]);
-        Store::run("UPDATE chats SET status='running' WHERE id=?", [$next['chat_id']]);
+        Store::notify(Job::query()->whereKey($jobId)->update(['status'=>'running']));
+        Store::notify(Chat::query()->whereKey($next['chat_id'])->update(['status'=>'running']));
         try {
             if (!$next['path']) {
                 $next['path'] = dirname(__DIR__, 2).'/runtime/chats/'.$next['chat_id'];
@@ -388,8 +391,8 @@ final class Codex
                 }
                 $thread = $result['thread']['id'];
                 $this->jobs[$jobId]['thread_id'] = $thread;
-                Store::run('UPDATE chats SET thread_id=? WHERE id=?', [$thread, $this->jobs[$jobId]['chat_id']]);
-                if (Store::all('SELECT cancel FROM jobs WHERE id=?', [$jobId])[0]['cancel']) {
+                Store::notify(Chat::query()->whereKey($this->jobs[$jobId]['chat_id'])->update(['thread_id'=>$thread]));
+                if (Job::query()->whereKey($jobId)->value('cancel')) {
                     $this->finish($jobId, 'cancelled');
                     return;
                 }
@@ -406,7 +409,7 @@ final class Codex
                         return;
                     }
                     $this->jobs[$jobId]['turn_id'] = $result['turn']['id'];
-                    Store::run('UPDATE jobs SET turn_id=? WHERE id=?', [$result['turn']['id'], $jobId]);
+                    Store::notify(Job::query()->whereKey($jobId)->update(['turn_id'=>$result['turn']['id']]));
                 }, $jobId);
             }, $jobId);
         } catch (\Throwable $error) {
@@ -467,10 +470,10 @@ final class Codex
                     $this->jobs[$jobId]['activity']['agents'][$agentId]['status'] = 'waiting';
                     $this->saveAgentActivity($jobId);
                 }
-                Store::run('INSERT INTO approvals (chat_id,rpc_id,method,details) VALUES (?,?,?,?)', [$this->jobs[$jobId]['chat_id'],json_encode($m['id']),$m['method'],json_encode($m['params'], JSON_INVALID_UTF8_SUBSTITUTE)]);
-                $id = (int)Store::db()->lastInsertId();
+                $id = Approval::query()->create(['chat_id'=>$this->jobs[$jobId]['chat_id'], 'rpc_id'=>json_encode($m['id']), 'method'=>$m['method'], 'details'=>json_encode($m['params'], JSON_INVALID_UTF8_SUBSTITUTE)])->id;
+                Store::notify();
                 $this->jobs[$jobId]['approvals'][$id] = $m['id'];
-                Store::run("UPDATE chats SET status='approval' WHERE id=?", [$this->jobs[$jobId]['chat_id']]);
+                Store::notify(Chat::query()->whereKey($this->jobs[$jobId]['chat_id'])->update(['status'=>'approval']));
             } else {
                 $this->send(['id' => $m['id'],'error' => ['code' => -32601,'message' => 'This client does not support this interaction yet.']]);
             }
@@ -492,7 +495,7 @@ final class Codex
                 return;
             }
             $this->jobs[$jobId]['turn_id'] = $p['turn']['id'];
-            Store::run('UPDATE jobs SET turn_id=? WHERE id=?', [$p['turn']['id'], $jobId]);
+            Store::notify(Job::query()->whereKey($jobId)->update(['turn_id'=>$p['turn']['id']]));
         }
         $eventTurn = $p['turnId'] ?? $p['turn']['id'] ?? null;
         if ($eventTurn !== null && $eventTurn !== ($this->jobs[$jobId]['turn_id'] ?? null)) {
@@ -500,7 +503,7 @@ final class Codex
         }
         if (($m['method'] ?? '') === 'item/agentMessage/delta') {
             $id = $this->item($jobId, $p['itemId'], 'assistant', Store::agentName(), '');
-            Store::run('UPDATE messages SET body=body || ? WHERE id=?', [$p['delta'],$id]);
+            Message::appendBody($id, $p['delta']);
         }
         if (in_array($m['method'] ?? '', ['item/started','item/completed'])) {
             $item = $p['item'];
@@ -511,12 +514,12 @@ final class Codex
             }
             if ($type === 'agentMessage' && isset($item['text'])) {
                 $id = $this->item($jobId, $item['id'], 'assistant', Store::agentName(), '');
-                Store::run('UPDATE messages SET body=? WHERE id=?', [$item['text'],$id]);
+                Store::notify(Message::query()->whereKey($id)->update(['body'=>$item['text']]));
             }
             if ($type === 'commandExecution') {
                 $body = ($item['command'] ?? 'Command') . "\n" . substr($item['aggregatedOutput'] ?? '', -16000);
                 $id = $this->item($jobId, $item['id'], 'tool', 'Terminal', $body);
-                Store::run('UPDATE messages SET body=? WHERE id=?', [$body,$id]);
+                Store::notify(Message::query()->whereKey($id)->update(['body'=>$body]));
             }
             if ($type === 'fileChange') {
                 $body = implode("\n", array_map(fn ($c) => $c['path'] ?? 'File changed', $item['changes'] ?? []));
@@ -534,13 +537,13 @@ final class Codex
             return;
         }
         $id = $this->item($jobId, 'agent-activity', 'agent_activity', Store::agentName(), '');
-        Store::run('UPDATE messages SET body=? WHERE id=?', [json_encode($this->jobs[$jobId]['activity'], JSON_INVALID_UTF8_SUBSTITUTE), $id]);
+        Store::notify(Message::query()->whereKey($id)->update(['body'=>json_encode($this->jobs[$jobId]['activity'], JSON_INVALID_UTF8_SUBSTITUTE)]));
     }
     private function item(int $jobId, string $key, string $role, string $author, string $body): int
     {
         if (!isset($this->jobs[$jobId]['items'][$key])) {
-            Store::run('INSERT INTO messages (chat_id,role,author,body,created_at) VALUES (?,?,?,?,?)', [$this->jobs[$jobId]['chat_id'],$role,$author,$body,gmdate('c')]);
-            $this->jobs[$jobId]['items'][$key] = (int)Store::db()->lastInsertId();
+            $this->jobs[$jobId]['items'][$key] = Message::query()->create(['chat_id'=>$this->jobs[$jobId]['chat_id'], 'role'=>$role, 'author'=>$author, 'body'=>$body, 'created_at'=>gmdate('c')])->id;
+            Store::notify();
         }
         return $this->jobs[$jobId]['items'][$key];
     }
@@ -554,10 +557,10 @@ final class Codex
         if ($error) {
             $this->item($jobId, 'error-'.microtime(true), 'error', Store::agentName(), $error);
         }
-        Store::run('UPDATE jobs SET status=? WHERE id=?', [$status,$this->jobs[$jobId]['id']]);
-        $queued = Store::all("SELECT id FROM jobs WHERE chat_id=? AND status='queued'", [$chat]);
-        Store::run('UPDATE chats SET status=?, updated_at=? WHERE id=?', [$queued ? 'queued' : 'idle',gmdate('c'),$chat]);
-        Store::run("UPDATE approvals SET decision='decline' WHERE chat_id=? AND decision IS NULL", [$chat]);
+        Store::notify(Job::query()->whereKey($jobId)->update(['status'=>$status]));
+        $queued = Job::query()->where('chat_id', $chat)->where('status', 'queued')->exists();
+        Store::notify(Chat::query()->whereKey($chat)->update(['status'=>$queued ? 'queued' : 'idle', 'updated_at'=>gmdate('c')]));
+        Store::notify(Approval::query()->where('chat_id', $chat)->whereNull('decision')->update(['decision'=>'decline']));
         Store::event($chat, Store::agentName().' turn '.$status);
         foreach ($this->jobs[$jobId]['approvals'] as $rpcId) {
             $this->send(['id' => $rpcId,'result' => ['decision' => 'decline']]);
@@ -608,12 +611,13 @@ final class Codex
             if ($open >= 8) {
                 throw new \InvalidArgumentException('Close a terminal before opening another.');
             }
-            $row = Store::all('SELECT p.path FROM chats c LEFT JOIN projects p ON p.id=c.project_id WHERE c.id=?', [$chatId])[0] ?? null;
+            $row = Chat::query()->with('project')->find($chatId);
             if (!$row) {
                 throw new \InvalidArgumentException('Conversation not found.');
             }
-            $cwd = $row['path'] ?: dirname(__DIR__, 2).'/runtime/chats/'.$chatId;
-            if (!$row['path'] && !is_dir($cwd) && !mkdir($cwd, 0700, true)) {
+            $path = $row->project?->path;
+            $cwd = $path ?: dirname(__DIR__, 2).'/runtime/chats/'.$chatId;
+            if (!$path && !is_dir($cwd) && !mkdir($cwd, 0700, true)) {
                 throw new \RuntimeException('Could not create the chat directory.');
             }
             $cwd = realpath($cwd);

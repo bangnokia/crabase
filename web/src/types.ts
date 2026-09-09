@@ -3,6 +3,7 @@ export type Project = {
   name: string;
   path: string;
   created_order: number;
+  archived: number;
 };
 export type Chat = {
   id: string;
@@ -43,8 +44,9 @@ export type User = {
   avatar_url: string;
   created_at: string;
 };
-export type Account = User & { email: string; admin: number; enabled: number; git_name: string; git_email: string };
+export type Account = User & { email: string; admin: number; enabled: number; git_name: string; git_email: string; avatar_required?: boolean; avatar_fallback?: string };
 export type Snapshot = {
+  pins: string[];
   users: User[];
   agentName: string;
   models: CodexModel[];

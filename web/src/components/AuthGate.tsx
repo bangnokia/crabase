@@ -14,6 +14,22 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [oauth, setOauth] = useState(false);
+  const [avatarCheck, setAvatarCheck] = useState<{ id: string; source: string; available: boolean } | null>(null);
+  const avatarSource = user?.avatar_url || user?.avatar_fallback || '';
+  useEffect(() => {
+    if (!user) return;
+    let stale = false;
+    const image = new Image();
+    const finish = (available: boolean) => {
+      if (!stale) setAvatarCheck({ id: user.id, source: avatarSource, available });
+    };
+    const timer = setTimeout(() => finish(false), 8000);
+    image.onload = () => { clearTimeout(timer); finish(image.naturalWidth > 0); };
+    image.onerror = () => { clearTimeout(timer); finish(false); };
+    if (avatarSource) image.src = avatarSource;
+    else finish(false);
+    return () => { stale = true; clearTimeout(timer); image.onload = image.onerror = null; };
+  }, [user?.id, avatarSource]);
   async function refresh() {
     const response = await fetch('/auth/session', { credentials: 'same-origin' });
     if (!response.ok && response.status !== 401) throw new Error('Unable to check your session.');
@@ -34,7 +50,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
     setUser(null);
   }
   if (!loaded) return <div className="login-page" role="status">Loading…</div>;
-  if (user) return <AuthContext.Provider value={{ user, refresh, logout }}>{children}</AuthContext.Provider>;
+  if (user) {
+    if (avatarCheck?.id !== user.id || avatarCheck.source !== avatarSource) return <div className="login-page" role="status">Checking profile…</div>;
+    return <AuthContext.Provider value={{ user: { ...user, avatar_required: !avatarCheck.available }, refresh, logout }}>{children}</AuthContext.Provider>;
+  }
   return <main className="login-page"><form className="login-form" onSubmit={async event => {
     event.preventDefault();
     if (busy) return;

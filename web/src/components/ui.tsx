@@ -1,6 +1,9 @@
+import { createPortal } from "react-dom";
+import { menuPosition } from "../lib/layout";
 import {
   createContext,
   useEffect,
+  useLayoutEffect,
   useId,
   useRef,
   useState,
@@ -36,6 +39,7 @@ export function Menu({
   className = '',
   disabled = false,
   contentRole = 'menu',
+  viewport = false,
 }: {
   label: string;
   icon: ReactNode;
@@ -43,22 +47,48 @@ export function Menu({
   className?: string;
   disabled?: boolean;
   contentRole?: 'menu' | 'dialog';
+  viewport?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ left: 0, top: 0 });
+  useLayoutEffect(() => {
+    if (!open || !viewport) return;
+    const place = () => {
+      if (!ref.current || !contentRef.current) return;
+      setPosition(menuPosition(ref.current.getBoundingClientRect(), contentRef.current.getBoundingClientRect(), { width: window.innerWidth, height: window.innerHeight }));
+    };
+    place();
+    contentRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open, viewport]);
   useEffect(() => {
     const close = (event: PointerEvent) => {
-      if (!ref.current?.contains(event.target as Node))
+      if (!ref.current?.contains(event.target as Node) && !contentRef.current?.contains(event.target as Node))
         setOpen(false);
     };
     document.addEventListener("pointerdown", close);
     return () => document.removeEventListener("pointerdown", close);
   }, []);
+  const content = (
+    <MenuClose.Provider value={() => setOpen(false)}>
+      <div ref={contentRef} className={`menu-content ${viewport ? "viewport-menu" : ""}`} role={contentRole} aria-label={label}
+        style={viewport ? position : undefined}>
+        {children}
+      </div>
+    </MenuClose.Provider>
+  );
   return (
     <div
       ref={ref}
       className={`menu ${className}`}
-      onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}
+      onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget) && !contentRef.current?.contains(event.relatedTarget)) setOpen(false); }}
       onKeyDown={(event) => {
         if (event.key !== "Escape") return;
         event.stopPropagation();
@@ -75,13 +105,7 @@ export function Menu({
       >
         {icon}
       </IconButton>
-      {open && (
-        <MenuClose.Provider value={() => setOpen(false)}>
-          <div className="menu-content" role={contentRole} aria-label={label}>
-            {children}
-          </div>
-        </MenuClose.Provider>
-      )}
+      {open && (viewport ? createPortal(content, document.body) : content)}
     </div>
   );
 }

@@ -45,11 +45,14 @@ final class Actions
         $result = match ($action) {
             'projectFolders' => WorkspaceFolders::listing($data),
             'projectContext' => self::projectContext($data),
+            'avatarSave' => Attachments::saveAvatar($data),
             'projectWorkspace' => ProjectWorkspace::snapshot($data),
             'projectFile' => ProjectWorkspace::file($data),
             'projectDiff' => ProjectWorkspace::diff($data),
             'projectSave' => ProjectWorkspace::save($data),
+            'projectPin' => self::pinProject($data),
             'project' => self::createProject($data),
+            'projectArchive', 'projectDelete' => self::manageProject($action, $data),
             'create' => self::createChat($data),
             'message' => self::sendMessage($data),
             'archive' => self::archiveChat($data),
@@ -80,6 +83,45 @@ final class Actions
         Project::query()->create(['id' => $id, 'name' => $name, 'path' => $path]);
         Store::event(null, "Added project $name");
         return ['id' => $id];
+    }
+
+    public static function pinProject(array $data): array
+    {
+        $id = Store::text($data['project_id'] ?? null, 64);
+        if (!is_bool($data['pinned'] ?? null)) throw new InvalidArgumentException('Pinned must be a boolean.');
+        $user = User::query()->find(Store::text($data['user_id'] ?? null, 64)) ?? throw new InvalidArgumentException('User not found.');
+        if (!Project::query()->whereKey($id)->exists()) throw new InvalidArgumentException('Project not found.');
+        if ($data['pinned']) $user->pinnedProjects()->syncWithoutDetaching([$id]);
+        else $user->pinnedProjects()->detach($id);
+        return ['ok' => true];
+    }
+
+    public static function manageProject(string $action, array $data): array
+    {
+        $id = Store::text($data['project_id'] ?? null, 64);
+        if ($action === 'projectArchive' && !is_bool($data['archived'] ?? null)) {
+            throw new InvalidArgumentException('Archived must be a boolean.');
+        }
+        \support\Db::transaction(function () use ($action, $data, $id) {
+            $project = Project::query()->find($id) ?? throw new InvalidArgumentException('Project not found.');
+            if ($action === 'projectArchive') {
+                $project->update(['archived' => (int)$data['archived']]);
+                return;
+            }
+            $chats = Chat::query()->where('project_id', $id);
+            $ids = $chats->pluck('id');
+            if ((clone $chats)->where('status', '!=', 'idle')->exists() ||
+                Job::query()->whereIn('chat_id', $ids)->whereIn('status', ['queued', 'running'])->exists()) {
+                throw new InvalidArgumentException('Stop active work in this project before deleting it.');
+            }
+            // Database records only: never remove project folders, worktrees, or files.
+            foreach ([Approval::class, Job::class, Message::class, Event::class] as $model) {
+                $model::query()->whereIn('chat_id', $ids)->delete();
+            }
+            $chats->delete();
+            $project->delete();
+        });
+        return ['ok' => true];
     }
 
     public static function createChat(array $data): array
@@ -126,7 +168,7 @@ final class Actions
                 'author' => $author, 'body' => $body, 'created_at' => gmdate('c'), 'user_id' => $user->id,
                 'attachments' => $attachments,
             ]);
-            foreach ($attachments as $file) Store::run('DELETE FROM uploads WHERE id=?', [$file['id']], false);
+            \app\model\Upload::query()->whereIn('id', array_column($attachments, 'id'))->delete();
             $chat->update(['updated_at' => gmdate('c')]);
             if ($mode === 'agent') {
                 Job::query()->create(['chat_id' => $id, 'prompt' => $body, 'model' => $options['model'], 'effort' => $options['effort'], 'message_id'=>$message->id]);

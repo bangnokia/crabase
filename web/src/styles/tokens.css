@@ -20,6 +20,8 @@
   --focus: #52754a;
   --danger: #ae352e;
   --danger-surface: #fff3f1;
+  --warning: #805c13;
+  --warning-surface: #faf1db;
   --code: #f0efeb;
   --terminal-background: #faf9f6;
   --terminal-selection: #d7dfd3;
@@ -72,6 +74,8 @@
   --focus: #b1c9a8;
   --danger: #ffaaa1;
   --danger-surface: #372724;
+  --warning: #e2c275;
+  --warning-surface: #332e20;
   --code: #171815;
   --terminal-background: #11120f;
   --terminal-selection: #52604d;
