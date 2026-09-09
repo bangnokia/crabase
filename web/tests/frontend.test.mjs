@@ -6,6 +6,7 @@ import { avatarUrl, validAvatarUrl } from "../src/lib/identity.ts";
 
 test("chat routes support direct loads without interpreting arbitrary paths", () => {
   assert.deepEqual(parseRoute("/"), { page: "new" });
+  assert.deepEqual(parseRoute("/settings"), { page: "settings" });
   const id = "fb6904dc4c961211";
   assert.deepEqual(parseRoute(chatPath(id)), { page: "chat", id });
   assert.deepEqual(parseRoute(`/chat/${id}/`), { page: "chat", id });

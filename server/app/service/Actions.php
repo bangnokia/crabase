@@ -124,13 +124,13 @@ final class Actions
         }
         $options = $mode === 'agent' ? self::agentOptions($data) : ['model' => null,'effort' => null];
         \support\Db::transaction(function () use ($chat, $id, $body, $user, $author, $mode, $options) {
-            Message::query()->create([
+            $message = Message::query()->create([
                 'chat_id' => $id, 'role' => $mode === 'note' ? 'note' : 'user',
                 'author' => $author, 'body' => $body, 'created_at' => gmdate('c'), 'user_id' => $user->id,
             ]);
             $chat->update(['updated_at' => gmdate('c')]);
             if ($mode === 'agent') {
-                Job::query()->create(['chat_id' => $id, 'prompt' => $body, 'model' => $options['model'], 'effort' => $options['effort']]);
+                Job::query()->create(['chat_id' => $id, 'prompt' => $body, 'model' => $options['model'], 'effort' => $options['effort'], 'message_id'=>$message->id]);
                 Chat::query()->whereKey($id)->where('status', 'idle')->update(['status' => 'queued']);
             }
             Store::event($id, $author . ($mode === 'agent' ? ' asked '.Store::agentName() : ' added a note'));

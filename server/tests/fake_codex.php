@@ -16,7 +16,9 @@ while (($line = fgets(STDIN)) !== false) {
         case 'turn/start':
             $id = 'turn-'.++$turn;
             emit(['method'=>'turn/started','params'=>['threadId'=>$params['threadId'],'turn'=>['id'=>$id,'status'=>'inProgress']]]);
-            emit(['method'=>'item/agentMessage/delta','params'=>['threadId'=>$params['threadId'],'turnId'=>$id,'itemId'=>'same-item-id','delta'=>$params['input'][0]['text']]]);
+            $text = $params['input'][0]['text'];
+            if (str_starts_with($text, 'Participant context (JSON):')) $text = explode("\n\nCurrent message:\n", $text, 2)[1];
+            emit(['method'=>'item/agentMessage/delta','params'=>['threadId'=>$params['threadId'],'turnId'=>$id,'itemId'=>'same-item-id','delta'=>$text]]);
             $result = ['turn'=>['id'=>$id]];
             break;
         case 'turn/interrupt':

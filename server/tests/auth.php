@@ -31,6 +31,17 @@ try {
     S::run("INSERT INTO chats (id,title,created_at,updated_at) VALUES ('test','Test','now','now')");
     S::run("INSERT INTO messages (chat_id,role,author,body,created_at,user_id) VALUES ('test','user','Member','hi','now',?)",[$memberId]);
     authCheck(str_contains(A::coauthors('test'),'Co-authored-by: Git Name <git@example.com>'));
+    $messageId = S::all("SELECT id FROM messages WHERE chat_id='test'")[0]['id'];
+    $job = ['chat_id'=>'test','message_id'=>$messageId,'prompt'=>'same message'];
+    $input = app\service\ParticipantContext::input($job);
+    $context = json_decode(explode("\n\nCurrent message:\n", substr($input,strlen("Participant context (JSON):\n")),2)[0],true);
+    authCheck($context['sender'] === ['user_id'=>$memberId,'name'=>'Member']);
+    authCheck(!str_contains($input,'@example.com') && !str_contains($input,'avatar'));
+    S::run("INSERT INTO messages (chat_id,role,author,body,created_at,user_id) VALUES ('test','user','Admin','same message','now',?)",[$id]);
+    authCheck(app\service\ParticipantContext::input($job) !== 'same message');
+    $later = app\service\ParticipantContext::input($job);
+    authCheck(str_contains($later,'"sender":{"user_id":"'.$memberId.'"'));
+    authCheck(str_contains(app\service\ParticipantContext::input(['chat_id'=>'test','prompt'=>'legacy']), '"sender":null'));
     denied(fn () => A::update($member,['name'=>'Member','email'=>'member@example.com','git_name'=>"bad\nname",'git_email'=>'git@example.com'],false));
     A::update($admin,['id'=>$memberId,'name'=>'Member','email'=>'member@example.com','enabled'=>false],true);
     authCheck(A::user($memberToken) === null);

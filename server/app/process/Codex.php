@@ -376,6 +376,7 @@ final class Codex
                 'developerInstructions' => "Save user-facing deliverables in $outputDirectory. To publish any finished file, run $publishCommand ABSOLUTE_FILE_PATH (shell-quote the file path). This command registers files already in that directory or copies files from elsewhere, then returns JSON with the actual url. Always publish deliverables with this command and share the returned url verbatim using Markdown links, or image Markdown for raster images. If a skill saves elsewhere, publish that file with the same command. Do not invent download URLs or share filesystem paths. Keep normal project source edits in the project folder. Publish only requested deliverables, never secrets or credentials."];
 
             $params['developerInstructions'] .= Auth::coauthors($next['chat_id']);
+            $params['developerInstructions'] .= \app\service\ParticipantContext::INSTRUCTIONS;
             if ($next['thread_id']) {
                 $params['threadId'] = $next['thread_id'];
             }
@@ -391,7 +392,7 @@ final class Codex
                     return;
                 }
                 $job = $this->jobs[$jobId];
-                $turnParams = ['threadId' => $thread,'input' => [['type' => 'text','text' => $job['prompt']]]];
+                $turnParams = ['threadId' => $thread,'input' => [['type' => 'text','text' => \app\service\ParticipantContext::input($job)]]];
                 if ($job['model'] !== null) {
                     $turnParams['model'] = $job['model'];
                 }

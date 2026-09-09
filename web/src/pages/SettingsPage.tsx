@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
 import { Check, Moon, Sun } from "lucide-react";
 import type { Account, Request } from "../types";
-import { Dialog, ErrorNotice } from "./ui";
-import { useAuth } from "./AuthGate";
+import { ErrorNotice } from "../components/ui";
+import { useAuth } from "../components/AuthGate";
 
-export function SettingsDialog({ theme, setTheme, request, close }: {
-  theme: string; setTheme: (theme: string) => void; request: Request; close: () => void;
+export function SettingsPage({ theme, setTheme, request, back }: {
+  theme: string; setTheme: (theme: string) => void; request: Request; back: () => void;
 }) {
   const { user, refresh, logout } = useAuth();
   const [page, setPage] = useState('profile');
   const [error, setError] = useState('');
-  return <Dialog title="Settings" className="settings-dialog" close={close}>
+  return <div className="settings-page"><button className="text-button" onClick={back}>← Back to workspace</button><h1>Settings</h1>
     <div className="settings-layout">
       <nav className="settings-nav" aria-label="Settings">
         <button aria-current={page === 'profile' ? 'page' : undefined} onClick={() => setPage('profile')}>Profile</button>
@@ -33,7 +33,7 @@ export function SettingsDialog({ theme, setTheme, request, close }: {
         {page === 'users' && !!user.admin && <UserManagement request={request} />}
       </section>
     </div>
-  </Dialog>;
+  </div>;
 }
 
 function AccountForm({ account, admin = false, save, cancel }: {

@@ -62,6 +62,8 @@ Never shrink an individual label just because it is long. Allow reflow or trunca
 
 Use a small spacing scale: **4, 8, 12, 16, 20, 24, 32px**. Each gap has one owner: a parent’s `gap` or padding, or an explicit child margin, not several competing rules.
 
+**Compact by default.** Do not introduce heavy padding for settings, admin screens, lists, or tool surfaces. Use 12px page gutters, 8–12px form gaps, and 4px vertical / 8px horizontal list-row padding. Settings section columns use at most a 16px gap. Reset inherited label/heading/action margins inside gap-based forms so spacing never doubles. Larger spacing must serve a specific reading or touch-target need, not decoration. Keep Settings as a dedicated full page with its own compact navigation, without the main workspace sidebar.
+
 | Area                      | Target                                                   |
 | ------------------------- | -------------------------------------------------------- |
 | Sidebar                   | 8px horizontal and 12px top padding                      |
@@ -70,7 +72,7 @@ Use a small spacing scale: **4, 8, 12, 16, 20, 24, 32px**. Each gap has one owne
 | Main content gutter       | 16–24px desktop; 12–16px narrow screens                  |
 | Heading to composer group | 24px                                                     |
 | Composer padding          | 12–16px; compact initial input, grows with text          |
-| Dialog content            | 24px desktop; 16px mobile                                |
+| Dialog content            | 12–16px; avoid nested padded wrappers                    |
 
 Align the conversation and composer to the same content edges. Keep desktop reading width around 740–840px; code may scroll within that area. Dense navigation can coexist with comfortable message spacing.
 

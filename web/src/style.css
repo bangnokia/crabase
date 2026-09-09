@@ -12,22 +12,27 @@
   width: min(360px, 100%);
 }
 .login-form h1 { font-size: var(--type-section); }
-.settings-dialog { width: min(760px, calc(100vw - 32px)); }
-.settings-layout { display: grid; grid-template-columns: 136px minmax(0, 1fr); gap: var(--space-6); }
+.settings-page { width: 100%; max-width: 900px; margin: 0 auto; padding: var(--space-3); overflow: auto; }
+.settings-shell { height: 100dvh; overflow: auto; background: var(--paper); }
+.settings-page > h1 { font-size: var(--type-section); margin: var(--space-2) 0 var(--space-3); }
+.settings-layout { display: grid; grid-template-columns: 136px minmax(0, 1fr); gap: var(--space-4); }
 .settings-nav { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-1); }
 .settings-nav button { text-align: left; padding: var(--space-2); border-radius: var(--radius-small); font-size: var(--type-control); }
 .settings-nav button:hover, .settings-nav button[aria-current="page"] { background: var(--hover); }
-.settings-group { padding: var(--space-5) var(--space-2) var(--space-1); color: var(--muted); font-size: var(--type-meta); }
-.settings-logout { margin-top: var(--space-6); }
-.settings-content { min-width: 0; max-height: 65dvh; overflow: auto; padding: var(--space-1); }
-.settings-content h2 { font-size: var(--type-control); margin-bottom: var(--space-4); }
+.settings-group { padding: var(--space-3) var(--space-2) var(--space-1); color: var(--muted); font-size: var(--type-meta); }
+.settings-logout { margin-top: var(--space-3); }
+.settings-content { min-width: 0; }
+.settings-content h2 { font-size: var(--type-control); margin: 0; }
 .account-form { display: flex; flex-direction: column; gap: var(--space-3); }
+.account-form label { margin: 0; }
+.account-form label > input { margin-top: var(--space-1); padding: var(--space-1) var(--space-2); }
+.account-form .dialog-actions { margin-top: 0; }
 .account-form p, .login-form p { font-size: var(--type-meta); }
 .check-label { display: flex; align-items: center; gap: var(--space-2); }
 .check-label input { width: auto; }
 .settings-users-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-3); }
 .settings-users { padding: 0; margin: 0; list-style: none; }
-.settings-users button { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); width: 100%; padding: var(--space-2); text-align: left; border-radius: var(--radius-small); }
+.settings-users button { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); width: 100%; padding: var(--space-1) var(--space-2); text-align: left; border-radius: var(--radius-small); }
 .settings-users button:hover { background: var(--hover); }
 .settings-users small { display: block; color: var(--muted); overflow-wrap: anywhere; }
 @media (max-width: 520px) {

@@ -14,7 +14,7 @@ import { CodePanel } from "./components/CodePanel";
 import { TerminalPanel } from "./components/TerminalPanel";
 import { Composer, type SendOptions } from "./components/Composer";
 import { SearchDialog } from "./components/WorkspaceDialogs";
-import { SettingsDialog } from "./components/SettingsDialog";
+import { SettingsPage } from "./pages/SettingsPage";
 import { NewChatPage } from "./pages/NewChatPage";
 import { ChatPage } from "./pages/ChatPage";
 export function App() {
@@ -183,6 +183,9 @@ export function App() {
       restore={() => void archive()}
     />
   );
+  if (route.page === "settings") return <main className="settings-shell">
+    <SettingsPage request={request} back={() => navigate('/')} {...preferences} />
+  </main>;
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main-content">
@@ -203,7 +206,10 @@ export function App() {
         }}
         open={open}
         newChat={newChat}
-        showDialog={setDialog}
+        showDialog={(value) => {
+          if (value === "settings") { navigate('/settings'); setSidebar(false); setDialog(''); }
+          else setDialog(value);
+        }}
         archive={(target) => void archive(target)}
       />
       <main className="main-panel" id="main-content" tabIndex={-1}>
@@ -301,13 +307,6 @@ export function App() {
             newChat(id);
             setToast("Project opened");
           }}
-          close={() => setDialog("")}
-        />
-      )}
-      {dialog === "settings" && (
-        <SettingsDialog
-          request={request}
-          {...preferences}
           close={() => setDialog("")}
         />
       )}
