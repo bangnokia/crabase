@@ -7,6 +7,7 @@ import {
   useContext,
   type ButtonHTMLAttributes,
   type ReactNode,
+  type RefObject,
 } from "react";
 import { Check, X } from "lucide-react";
 const MenuClose = createContext(() => {});
@@ -107,17 +108,22 @@ export function Dialog({
   close,
   children,
   className = "",
+  initialFocus,
+  minimal = false,
 }: {
   title: string;
   close: () => void;
   children: ReactNode;
   className?: string;
+  initialFocus?: RefObject<HTMLElement | null>;
+  minimal?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const id = useId();
   useEffect(() => {
     const opener = document.activeElement;
     ref.current?.showModal();
+    initialFocus?.current?.focus();
     return () => {
       ref.current?.close();
       if (opener instanceof HTMLElement) opener.focus();
@@ -134,12 +140,12 @@ export function Dialog({
       }}
     >
       <div className="dialog-inner">
-        <header className="dialog-heading">
+        {minimal ? <h2 id={id} className="sr-only">{title}</h2> : <header className="dialog-heading">
           <h2 id={id}>{title}</h2>
           <IconButton label="Close dialog" onClick={close}>
             <X size={18} />
           </IconButton>
-        </header>
+        </header>}
         {children}
       </div>
     </dialog>

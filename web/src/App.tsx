@@ -4,7 +4,7 @@ import { Check } from "lucide-react";
 import { useRoute } from "./hooks/useRoute";
 import { useWorkspace } from "./hooks/useWorkspace";
 import { usePreferences } from "./hooks/usePreferences";
-import { isSidebarShortcut } from "./lib/shortcuts";
+import { fileSearchDirection, isSidebarShortcut } from "./lib/shortcuts";
 import { chatPath } from "./lib/routes";
 import { Sidebar } from "./components/Sidebar";
 import { Header } from "./components/Header";
@@ -23,11 +23,14 @@ export function App() {
     workspace;
   const preferences = usePreferences(data.users, request);
   const [projectId, setProjectId] = useState("");
-  const [draft, setDraft] = useState("");
+  const [draftVersion, setDraftVersion] = useState(0);
   const [busy, setBusy] = useState(false);
   const sending = useRef(false);
-  const draftRef = useRef(draft);
-  draftRef.current = draft;
+  const draftRef = useRef("");
+  function clearDraft() {
+    draftRef.current = "";
+    setDraftVersion((version) => version + 1);
+  }
   const [dialog, setDialog] = useState<"" | "search" | "project" | "settings">(
     "",
   );
@@ -37,6 +40,7 @@ export function App() {
   );
   const [details, setDetails] = useState(() => localStorage.getItem("crabase-details-open") === "true");
   const [code, setCode] = useState(() => localStorage.getItem("crabase-code-open") === "true");
+  const [fileSearch, setFileSearch] = useState(false);
   const [terminal, setTerminal] = useState(false);
   const [toast, setToast] = useState("");
   const chat = data.chats.find((item) => item.id === selected);
@@ -44,24 +48,36 @@ export function App() {
     (item) => item.id === (selected ? chat?.project_id : projectId),
   );
   function open(id: string) {
+    setFileSearch(false);
     navigate(chatPath(id));
     setSidebar(false);
     setDialog("");
-    setDraft("");
+    clearDraft();
     setError("");
     setTerminal(false);
   }
   function newChat(id = "") {
+    setFileSearch(false);
     setProjectId(id);
     navigate("/");
     setSidebar(false);
     setDialog("");
-    setDraft("");
+    clearDraft();
     setError("");
     setTerminal(false);
   }
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
+      if (event.ctrlKey && fileSearchDirection(event) &&
+        document.querySelector('.file-palette[open]')) return;
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "p" &&
+        !event.shiftKey && !event.altKey && !event.isComposing && project) {
+        if (document.querySelector('dialog[open]:not(.file-palette)')) return;
+        event.preventDefault();
+        setCode(true);
+        setFileSearch(true);
+        document.querySelector<HTMLInputElement>('.file-palette input')?.focus();
+      }
       if ((event.metaKey || event.ctrlKey) && event.key === "k") {
         event.preventDefault();
         setDialog("search");
@@ -88,7 +104,7 @@ export function App() {
     };
     window.addEventListener("keydown", key, true);
     return () => window.removeEventListener("keydown", key, true);
-  }, [navigate, selected]);
+  }, [navigate, selected, project?.id]);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(""), 2600);
@@ -110,7 +126,7 @@ export function App() {
     }
   }
   async function send(options: SendOptions) {
-    const body = draft.trim();
+    const body = draftRef.current.trim();
     if (!body || sending.current) return;
     sending.current = true;
     setBusy(true);
@@ -131,7 +147,7 @@ export function App() {
         body,
         user_id: data.users.find((user) => user.name === preferences.name)?.id,
       });
-      if (draftRef.current.trim() === body) setDraft("");
+      if (draftRef.current.trim() === body) clearDraft();
     } catch (error) {
       setError((error as Error).message);
     } finally {
@@ -152,8 +168,8 @@ export function App() {
         data,
         live,
         loaded,
-        draft,
-        setDraft,
+        draftRef,
+        draftVersion,
         busy,
         error,
         request,
@@ -249,7 +265,8 @@ export function App() {
         )}
       </main>
       {project && <CodePanel project={project} request={request} theme={preferences.theme}
-        open={code} close={() => setCode(false)} />}
+        fileSearch={fileSearch} closeFileSearch={() => setFileSearch(false)}
+        open={code} close={() => { setCode(false); setFileSearch(false); }} />}
       <DetailsPanel
         artifacts={workspace.artifacts}
         messages={messages}

@@ -693,6 +693,12 @@ small {
 .composer-box textarea:focus-visible {
   outline: none;
 }
+@supports (field-sizing: content) {
+  .composer-box textarea {
+    field-sizing: content;
+    height: auto;
+  }
+}
 .composer-box textarea::placeholder {
   color: var(--muted);
 }
@@ -1118,12 +1124,8 @@ small {
   font-size: var(--type-control);
   min-width: 0;
 }
-.code-panel .right-panel-heading {
-  justify-content: flex-end;
-  margin-bottom: var(--space-1);
-}
 @media (pointer: fine) {
-  .code-panel .right-panel-heading .icon-button {
+  .code-panel .right-panel-actions .icon-button {
     width: 24px;
     height: 24px;
     min-width: 24px;
@@ -1163,7 +1165,8 @@ small {
   padding: var(--space-1) var(--space-2);
   border: 0;
   border-radius: 0;
-  background: var(--paper);
+  --navigator-bg: color-mix(in srgb, var(--paper) 75%, var(--sidebar));
+  background: var(--navigator-bg);
   overflow: hidden;
 }
 .workspace-navigator-resize {
@@ -1180,12 +1183,15 @@ small {
 }
 .workspace-view-switch {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: var(--space-1);
   min-height: 36px;
   padding: 0 0 var(--space-2) var(--space-1);
 }
 .workspace-view-switch button {
+  flex-shrink: 0;
+  white-space: nowrap;
   min-height: 28px;
   display: flex;
   align-items: center;
@@ -1204,7 +1210,7 @@ small {
   color: var(--muted);
   font-size: var(--type-meta);
 }
-.workspace-view-switch .icon-button {
+.workspace-view-switch > .right-panel-actions {
   margin-left: auto;
 }
 .workspace-empty {
@@ -1289,7 +1295,7 @@ small {
 .project-file-tree {
   flex: 1;
   min-height: 0;
-  --trees-bg-override: var(--paper);
+  --trees-bg-override: var(--navigator-bg);
   --trees-bg-muted-override: var(--hover);
   --trees-fg-override: var(--text);
   --trees-fg-muted-override: var(--muted);
@@ -1363,7 +1369,55 @@ small {
 }
 .workspace-editor {
   height: 100%;
+  overflow: hidden;
+}
+.file-palette {
+  width: min(560px, calc(100vw - 32px));
+  margin-top: min(15vh, 120px);
+}
+.file-palette .dialog-inner {
+  padding: var(--space-3);
+}
+.file-palette-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  color: var(--muted);
+}
+.file-palette-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font-size: var(--type-control);
+}
+.file-palette-results {
+  max-height: min(360px, 50vh);
   overflow: auto;
+}
+.file-palette-results button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  text-align: left;
+  border-radius: var(--radius-small);
+  font-size: var(--type-label);
+}
+.file-palette-results button:hover,
+.file-palette-results button[aria-selected="true"] {
+  background: var(--hover);
+}
+.file-palette-results svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.file-palette-results small {
+  display: block;
+  font-size: var(--type-meta);
+  color: var(--muted);
 }
 dialog {
   width: min(480px, calc(100vw - 32px));

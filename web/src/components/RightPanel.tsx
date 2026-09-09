@@ -16,7 +16,7 @@ export function RightPanel({
   storageKey,
   title,
 }: {
-  children: ReactNode;
+  children: ReactNode | ((actions: ReactNode) => ReactNode);
   className?: string;
   close: () => void;
   defaultWidth: number;
@@ -35,6 +35,14 @@ export function RightPanel({
 
   useEffect(() => localStorage.setItem(storageKey, String(width)), [storageKey, width]);
   useEffect(() => { if (!open) setFocused(false); }, [open]);
+
+  const actions = <div className="right-panel-actions">
+    {focusable && <IconButton label={focused ? "Exit code focus mode" : "Focus code workspace"}
+      aria-pressed={focused} onClick={() => setFocused((value) => !value)}>
+      {focused ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+    </IconButton>}
+    <IconButton label={`Close ${label.toLowerCase()}`} onClick={close}><X size={17} /></IconButton>
+  </div>;
 
   return <aside
     className={`right-panel ${className} ${open ? "open" : ""} ${focused ? "focus" : ""}`}
@@ -73,16 +81,12 @@ export function RightPanel({
           ? maxWidth : value + (event.key === "ArrowLeft" ? 16 : -16)));
       }}
     />}
+    {typeof children === "function" ? children(actions) : <>
     <div className="right-panel-heading">
       {title && <h2 className="truncate">{title}</h2>}
-      <div className="right-panel-actions">
-        {focusable && <IconButton label={focused ? "Exit code focus mode" : "Focus code workspace"}
-          aria-pressed={focused} onClick={() => setFocused((value) => !value)}>
-          {focused ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-        </IconButton>}
-        <IconButton label={`Close ${label.toLowerCase()}`} onClick={close}><X size={17} /></IconButton>
-      </div>
+      {actions}
     </div>
     {children}
+    </>}
   </aside>;
 }

@@ -22,7 +22,12 @@ export default function WorkspaceEditor({
   const file = useMemo<FileContents>(() => ({ name: path, contents: value }), [path]);
   const options = useMemo<FileOptions<undefined, undefined>>(() => ({
     disableFileHeader: true,
-    unsafeCSS: ':host { --diffs-bg: var(--paper); } pre { --diffs-bg: var(--paper); }',
+    unsafeCSS: `
+      :host { --diffs-bg: var(--paper); display: block; height: 100%; }
+      pre { --diffs-bg: var(--paper); height: 100%; }
+      [data-code] { height: 100%; overflow: auto; align-content: start; }
+      [data-code]::-webkit-scrollbar { width: 6px; }
+    `,
     overflow: "scroll",
     theme: theme === "dark" ? "pierre-dark" : "pierre-light",
     themeType: theme === "dark" ? "dark" : "light",

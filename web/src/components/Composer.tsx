@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import {
   ArrowUp,
   Folder,
@@ -20,8 +20,8 @@ export function Composer({
   data,
   live,
   loaded,
-  draft,
-  setDraft,
+  draftRef,
+  draftVersion,
   busy,
   error,
   dismissError,
@@ -35,8 +35,8 @@ export function Composer({
   data: Snapshot;
   live: boolean;
   loaded: boolean;
-  draft: string;
-  setDraft: (draft: string) => void;
+  draftRef: RefObject<string>;
+  draftVersion: number;
   busy: boolean;
   error: string;
   dismissError: () => void;
@@ -46,11 +46,13 @@ export function Composer({
   restore: () => void;
 }) {
   const textarea = useRef<HTMLTextAreaElement>(null);
+  const [draft, setDraft] = useState(() => draftRef.current);
+  useEffect(() => setDraft(draftRef.current), [draftRef, draftVersion]);
   const [model, setModel] = useState(
-    sessionStorage.getItem("crabase.model") || "",
+    () => sessionStorage.getItem("crabase.model") || "",
   );
   const [effort, setEffort] = useState(
-    sessionStorage.getItem("crabase.effort") || "",
+    () => sessionStorage.getItem("crabase.effort") || "",
   );
   const [branch, setBranch] = useState<string | null>(null);
   const [branchError, setBranchError] = useState(false);
@@ -70,6 +72,7 @@ export function Composer({
     sessionStorage.setItem("crabase.effort", reasoning);
   }, [chosen?.model, reasoning]);
   useEffect(() => {
+    if (CSS.supports("field-sizing", "content")) return;
     const el = textarea.current;
     if (el) {
       el.style.height = "auto";
@@ -145,7 +148,10 @@ export function Composer({
             rows={2}
             value={draft}
             maxLength={20000}
-            onChange={(event) => setDraft(event.target.value)}
+            onChange={(event) => {
+              draftRef.current = event.target.value;
+              setDraft(event.target.value);
+            }}
             onKeyDown={(event) => {
               if (
                 event.key === "Enter" &&

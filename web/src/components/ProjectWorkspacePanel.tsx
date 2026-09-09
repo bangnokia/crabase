@@ -1,8 +1,9 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Columns2, Rows2, FilePlus2, Files as FilesIcon, GitCompareArrows, RefreshCw, X } from "lucide-react";
 import { FileTree, useFileTree } from "@pierre/trees/react";
 import type { Project, ProjectWorkspace, Request, WorkspaceChange } from "../types";
 import { IconButton } from "./ui";
+import { FilePalette } from "./FilePalette";
 import { clampPanelWidth } from "../lib/layout";
 const WorkspaceCode = lazy(() => import("./WorkspaceCode"));
 const WorkspaceEditor = lazy(() => import("./WorkspaceEditor"));
@@ -10,10 +11,13 @@ const WorkspaceEditor = lazy(() => import("./WorkspaceEditor"));
 type OpenFile = { path: string; contents: string; hash: string; draft: string };
 type Diff = { path: string; patch: string };
 
-export function ProjectWorkspacePanel({ project, request, theme }: {
+export function ProjectWorkspacePanel({ project, request, theme, actions, fileSearch, closeFileSearch }: {
   project: Project;
   request: Request;
   theme: string;
+  actions: ReactNode;
+  fileSearch: boolean;
+  closeFileSearch: () => void;
 }) {
   const [workspace, setWorkspace] = useState<ProjectWorkspace>();
   const [fileRequest, setFileRequest] = useState<{ path: string; token: number }>();
@@ -167,10 +171,24 @@ export function ProjectWorkspacePanel({ project, request, theme }: {
   }
 
   return <section className="workspace-browser">
+    {fileSearch && <FilePalette paths={workspace?.paths || []} loading={workspaceLoading} error={error}
+      open={openFile} close={closeFileSearch} />}
     {error && <p className="workspace-message error-notice" role="alert">{error}</p>}
     <div className="workspace-split" ref={splitRef}
       style={{ "--navigator-width": `${navigatorWidth}px` } as CSSProperties}>
       <aside className="workspace-navigator" aria-label={navigator === "files" ? "Project files" : "Git changes"}>
+        <nav className="workspace-view-switch" aria-label="Code navigator">
+          <IconButton label="Files" aria-pressed={navigator === "files"} onClick={() => setNavigator("files")}>
+            <FilesIcon size={15} />
+          </IconButton>
+          <IconButton label={`Changes (${workspace?.changes.length || 0})`} aria-pressed={navigator === "changes"} onClick={() => setNavigator("changes")}>
+            <GitCompareArrows size={15} />
+          </IconButton>
+          <IconButton label="Refresh project" onClick={refresh} disabled={loading}>
+            <RefreshCw size={15} className={loading ? "spin" : ""} />
+          </IconButton>
+          {actions}
+        </nav>
         <div className="workspace-navigator-resize" role="separator" aria-label="Resize code navigator"
           aria-orientation="vertical" aria-valuemin={200} aria-valuemax={500} aria-valuenow={navigatorWidth}
           tabIndex={0} onPointerDown={(event) => {
@@ -189,17 +207,6 @@ export function ProjectWorkspacePanel({ project, request, theme }: {
             resizeNavigator(event.key === "Home" ? 200 : event.key === "End" ? 500
               : navigatorWidth + (event.key === "ArrowLeft" ? 16 : -16));
           }} />
-        <nav className="workspace-view-switch" aria-label="Code navigator">
-          <button aria-pressed={navigator === "files"} onClick={() => setNavigator("files")}>
-            <FilesIcon size={15} /> Files
-          </button>
-          <button aria-pressed={navigator === "changes"} onClick={() => setNavigator("changes")}>
-            <GitCompareArrows size={15} /> Changes <span>{workspace?.changes.length || 0}</span>
-          </button>
-          <IconButton label="Refresh project" onClick={refresh} disabled={loading}>
-            <RefreshCw size={15} className={loading ? "spin" : ""} />
-          </IconButton>
-        </nav>
         {!workspace ? <p className="workspace-message muted">{workspaceLoading ? "Loading project…" : "Unable to load project. Try refreshing."}</p>
           : navigator === "files" ? workspace.paths.length ? (
             <FileTree model={model} className="project-file-tree" onClick={(event) => {

@@ -156,6 +156,14 @@ One `codex app-server` subprocess serves concurrent threads using JSON-RPC over 
 
 Cancellation and per-request RPC failures stay scoped to the owning job; a failed interrupt does not falsely finish a turn that may still be running. A shared app-server failure marks all active jobs failed, leaves queued jobs available for a new connection, and retries after a short delay. Worker restart similarly finalizes interrupted activity. `parallel_chats.php` uses a single deterministic fake app-server process to test concurrency, FIFO, stream isolation, approvals, cancellation, stale events, and process failure without model calls. The backend has been restarted with parallel scheduling and subagent event capture enabled.
 
+## File palette
+
+Cmd/Ctrl+P in a project opens the code workspace and its file palette. `FilePalette` reuses the shared dialog and the existing `projectWorkspace` path list; filename-first fuzzy matching is local and capped at 50 displayed results. Trees' built-in search in the installed version is substring-only, so the palette uses the small tested `lib/file-search.ts` matcher. Choosing a result uses the same `openFile` path as the tree, preserving existing tabs, drafts, and backend validation. Standalone chats retain the browser shortcut.
+
+## Composer typing
+
+Composer typing state is local to `Composer`; `App` keeps only a draft ref for sending and preserving text across the new-chat-to-chat remount. A version counter clears the local draft on explicit navigation or successful send without rerendering the workspace per keystroke. New text entered during a pending send is preserved. Textarea sizing uses native `field-sizing` when supported, with the existing measurement fallback for older browsers.
+
 ## Integrated terminal
 
 Each chat can open a resizable bottom terminal with Cmd/Ctrl+J or the header terminal button. Multiple tabs persist while the PHP worker runs; hiding the panel, changing active tabs, or reconnecting does not stop their shells. Closing a tab kills that PTY, and a shell that exits closes its tab. Project chats start in the registered project path, while standalone chats use `server/runtime/chats/<chat-id>`.
