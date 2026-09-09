@@ -3,6 +3,7 @@ import type { FitAddon, ITheme, Terminal } from "ghostty-web";
 import { Plus, X } from "lucide-react";
 import type { Request, TerminalSession } from "../types";
 import { IconButton } from "./ui";
+import { terminalPanelAction } from "../lib/terminal-panel";
 
 let ghostty: Promise<typeof import("ghostty-web")> | undefined;
 const ready = () => ghostty ??= import("ghostty-web").then(async (library) => {
@@ -51,7 +52,7 @@ export function TerminalPanel({
   const terminalRef = useRef<Terminal | undefined>(undefined);
   const renderedOutput = useRef("");
   const creating = useRef(false);
-  const initialized = useRef(false);
+  const previousPanel = useRef({ open: false, count: 0 });
   const [active, setActive] = useState("");
   const [height, setHeight] = useState(() => Math.min(Math.max(MIN_HEIGHT, Number(localStorage.getItem("crabase-terminal-height")) || 280), Math.max(MIN_HEIGHT, window.innerHeight - 180)));
   const current = sessions.find((session) => session.id === active) || sessions[0];
@@ -68,18 +69,20 @@ export function TerminalPanel({
     creating.current = true;
     request<{ terminal: TerminalSession }>("terminalOpen", { cols: 80, rows: 24 })
       .then(({ terminal }) => setActive(terminal.id))
-      .catch((error) => fail(error.message))
+      .catch((error) => {
+        fail(error.message);
+        if (!latest.current) close();
+      })
       .finally(() => { creating.current = false; });
   };
 
   useEffect(() => {
-    if (!open) return;
-    if (!initialized.current) {
-      initialized.current = true;
-      if (!sessions.length) add();
-    }
-    else if (sessions.length && !current) setActive(sessions[0].id);
-  }, [open, sessions.length, current?.id]);
+    const next = { open, count: sessions.length };
+    const action = terminalPanelAction(previousPanel.current, next);
+    previousPanel.current = next;
+    if (action === "create") add();
+    if (action === "hide") close();
+  }, [open, sessions.length]);
 
   useEffect(() => {
     if (!open || !current || !host.current) return;
@@ -92,7 +95,7 @@ export function TerminalPanel({
       terminal = new library.Terminal({
         cursorBlink: true,
         fontSize: 14,
-        fontFamily: styles.getPropertyValue("--font-mono"),
+        fontFamily: styles.getPropertyValue("--font-editor"),
         scrollback: 5000,
         theme: terminalTheme(),
       });
@@ -179,7 +182,7 @@ export function TerminalPanel({
         <IconButton label="Hide terminal" className="terminal-hide" onClick={close}><X size={15} /></IconButton>
       </header>
       <div className="terminal-screen" ref={host}>
-        {!current && <p className="terminal-empty">No terminals open.</p>}
+        {!current && <p className="terminal-empty" role="status">Opening terminal…</p>}
       </div>
     </section>
   );

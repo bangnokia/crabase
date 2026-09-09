@@ -224,7 +224,7 @@ export function ProjectWorkspacePanel({ project, request, theme, actions, fileSe
             </button></li>
           ))}</ul> : <p className="workspace-message muted">No changes.</p>}
       </aside>
-      <div className="workspace-stage">
+      {(files.length > 0 || selectedChange || fileLoading) && <div className="workspace-stage">
         <div className="workspace-stage-header">
           <FileTabs files={files} active={activePath} diff={selectedChange} surface={surface}
             select={openFile} close={closeFile} saving={pendingSaves.current}
@@ -258,7 +258,7 @@ export function ProjectWorkspacePanel({ project, request, theme, actions, fileSe
             <WorkspaceCode diff={diff} theme={theme} diffStyle={diffStyle} />
           </Suspense></div>
         </> : <div className="workspace-empty"><span>{loading ? "Loading change…" : "Select a change to review."}</span></div>}
-      </div>
+      </div>}
     </div>
   </section>;
 }
@@ -296,7 +296,7 @@ function FileTabs({ files, active, diff, surface, select, close, saving, selectD
     {files.map((file) => <div className="workspace-editor-tab" data-active={surface === "file" && file.path === active} key={file.path}>
       <button onClick={() => select(file.path)} title={file.path}>
         <span className="truncate">{file.path.split("/").pop()}</span>
-        {file.draft !== file.contents && <span aria-label="Unsaved">●</span>}
+        {file.draft !== file.contents && <span className="workspace-unsaved" role="img" aria-label="Unsaved changes" />}
       </button>
       <IconButton label={`Close ${file.path}`} onClick={() => close(file)} disabled={saving.has(file.path)}><X size={13} /></IconButton>
     </div>)}

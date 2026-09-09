@@ -1088,7 +1088,7 @@ small {
   width: 0;
   flex-grow: 1;
 }
-.main-panel:has(+ .code-panel.focus) {
+.main-panel:has(+ .code-panel.focus .workspace-stage) {
   width: 0;
   flex-grow: 0;
   overflow: hidden;
@@ -1145,6 +1145,17 @@ small {
   flex: 1;
   min-width: 0;
   min-height: 0;
+}
+.code-panel.open:has(.workspace-split):not(:has(.workspace-stage)) {
+  width: 280px;
+  flex-grow: 0;
+  padding: 0;
+}
+.workspace-split:not(:has(.workspace-stage)) {
+  grid-template-columns: minmax(0, 1fr);
+}
+.workspace-split:not(:has(.workspace-stage)) .workspace-navigator {
+  grid-column: 1;
 }
 .workspace-stage,
 .workspace-navigator {
@@ -1266,6 +1277,13 @@ small {
 }
 .workspace-editor-tab.diff {
   min-width: 136px;
+}
+.workspace-unsaved {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--terminal-blue);
 }
 .workspace-editor-tab > button:first-child {
   display: flex;
