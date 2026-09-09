@@ -1,5 +1,5 @@
-import { lazy, Suspense, useEffect, useState } from "react";
-import { FilePlus2, Files as FilesIcon, GitCompareArrows, RefreshCw, X } from "lucide-react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { Columns2, Rows2, FilePlus2, Files as FilesIcon, GitCompareArrows, RefreshCw, X } from "lucide-react";
 import { FileTree, useFileTree } from "@pierre/trees/react";
 import type { Project, ProjectWorkspace, Request, WorkspaceChange } from "../types";
 import { IconButton } from "./ui";
@@ -17,11 +17,22 @@ export function ProjectWorkspacePanel({ project, request, theme }: {
   const [workspace, setWorkspace] = useState<ProjectWorkspace>();
   const [fileRequest, setFileRequest] = useState<{ path: string; token: number }>();
   const [files, setFiles] = useState<OpenFile[]>([]);
+  const [recentTabs, setRecentTabs] = useState<string[]>([]);
   const [activePath, setActivePath] = useState("");
   const [selectedChange, setSelectedChange] = useState<WorkspaceChange>();
   const [diff, setDiff] = useState<Diff>();
   const [navigator, setNavigator] = useState<"files" | "changes">("files");
   const [surface, setSurface] = useState<"file" | "diff">("file");
+  const [diffStyle, setDiffStyle] = useState<"unified" | "split">("unified");
+  const [navigatorWidth, setNavigatorWidth] = useState(() =>
+    Math.max(200, Math.min(500, Number(localStorage.getItem("crabase-code-navigator-width")) || 280)));
+  const splitRef = useRef<HTMLDivElement>(null);
+  const dragStart = useRef({ x: 0, width: 280 });
+  useEffect(() => localStorage.setItem("crabase-code-navigator-width", String(navigatorWidth)), [navigatorWidth]);
+
+  function resizeNavigator(width: number) {
+    setNavigatorWidth(Math.max(200, Math.min(500, (splitRef.current?.clientWidth || 700) - 200, width)));
+  }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const active = files.find((file) => file.path === activePath);
@@ -41,6 +52,12 @@ export function ProjectWorkspacePanel({ project, request, theme }: {
     setFileRequest((current) => ({ path, token: (current?.token || 0) + 1 }));
   }
 
+  function selectFile(path: string) {
+    setRecentTabs((tabs) => [...tabs.filter((tab) => tab !== path), path].slice(-12));
+    setActivePath(path);
+    setSurface("file");
+  }
+
   async function refresh() {
     setLoading(true);
     setError("");
@@ -57,6 +74,7 @@ export function ProjectWorkspacePanel({ project, request, theme }: {
     setWorkspace(undefined);
     setFileRequest(undefined);
     setFiles([]);
+    setRecentTabs([]);
     setActivePath("");
     setSelectedChange(undefined);
     setDiff(undefined);
@@ -74,7 +92,7 @@ export function ProjectWorkspacePanel({ project, request, theme }: {
     if (!fileRequest) return;
     const existing = files.find((file) => file.path === fileRequest.path);
     if (existing) {
-      setActivePath(existing.path);
+      selectFile(existing.path);
       return;
     }
     setLoading(true);
@@ -86,7 +104,7 @@ export function ProjectWorkspacePanel({ project, request, theme }: {
       setFiles((current) => current.some((item) => item.path === file.path)
         ? current
         : [...current, { ...file, draft: file.contents }]);
-      setActivePath(file.path);
+      selectFile(file.path);
     }).catch((error) => setError((error as Error).message))
       .finally(() => setLoading(false));
   }, [fileRequest, project.id, request]);
@@ -135,18 +153,39 @@ export function ProjectWorkspacePanel({ project, request, theme }: {
     if (file.draft !== file.contents && !window.confirm(`Discard unsaved changes to ${file.path}?`)) return;
     const remaining = files.filter((item) => item.path !== file.path);
     setFiles(remaining);
-    if (activePath === file.path) setActivePath(remaining.at(-1)?.path || "");
+    setRecentTabs((tabs) => tabs.filter((tab) => tab !== file.path));
+    if (activePath === file.path) setActivePath(recentTabs.filter((tab) => tab !== file.path && tab !== "/review").at(-1) || "");
   }
 
   function openChange(change: WorkspaceChange) {
+    setRecentTabs((tabs) => [...tabs.filter((tab) => tab !== "/review"), "/review"].slice(-12));
     setSelectedChange(change);
     setSurface("diff");
   }
 
   return <section className="workspace-browser">
     {error && <p className="workspace-message error-notice" role="alert">{error}</p>}
-    <div className="workspace-split">
+    <div className="workspace-split" ref={splitRef}
+      style={{ gridTemplateColumns: `minmax(0, 1fr) minmax(0, ${navigatorWidth}px)` }}>
       <aside className="workspace-navigator" aria-label={navigator === "files" ? "Project files" : "Git changes"}>
+        <div className="workspace-navigator-resize" role="separator" aria-label="Resize code navigator"
+          aria-orientation="vertical" aria-valuemin={200} aria-valuemax={500} aria-valuenow={navigatorWidth}
+          tabIndex={0} onPointerDown={(event) => {
+            if (event.button !== 0) return;
+            event.preventDefault();
+            dragStart.current = { x: event.clientX, width: navigatorWidth };
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }} onPointerMove={(event) => {
+            if (event.currentTarget.hasPointerCapture(event.pointerId))
+              resizeNavigator(dragStart.current.width + dragStart.current.x - event.clientX);
+          }} onPointerUp={(event) => {
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+          }} onKeyDown={(event) => {
+            if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+            event.preventDefault();
+            resizeNavigator(event.key === "Home" ? 200 : event.key === "End" ? 500
+              : navigatorWidth + (event.key === "ArrowLeft" ? 16 : -16));
+          }} />
         <nav className="workspace-view-switch" aria-label="Code navigator">
           <button aria-pressed={navigator === "files"} onClick={() => setNavigator("files")}>
             <FilesIcon size={15} /> Files
@@ -177,14 +216,24 @@ export function ProjectWorkspacePanel({ project, request, theme }: {
       </aside>
       <div className="workspace-stage">
         <div className="workspace-stage-header">
-          <FileTabs files={files} active={activePath} diff={selectedChange} surface={surface}
-            select={(path) => { setActivePath(path); setSurface("file"); }} close={closeFile}
-            selectDiff={() => setSurface("diff")} closeDiff={() => {
+          <FileTabs files={files.filter((file) => recentTabs.includes(file.path))} active={activePath}
+            diff={recentTabs.includes("/review") ? selectedChange : undefined} surface={surface}
+            select={selectFile} close={closeFile}
+            selectDiff={() => { if (selectedChange) openChange(selectedChange); }} closeDiff={() => {
+              setRecentTabs((tabs) => tabs.filter((tab) => tab !== "/review"));
               setSelectedChange(undefined);
               setDiff(undefined);
               setSurface("file");
             }} />
           {surface === "diff" && diff && <div className="workspace-stage-actions">
+            <IconButton label="Unified diff" aria-pressed={diffStyle === "unified"}
+              className={diffStyle === "unified" ? "active" : ""} onClick={() => setDiffStyle("unified")}>
+              <Rows2 size={16} />
+            </IconButton>
+            <IconButton label="Side-by-side diff" aria-pressed={diffStyle === "split"}
+              className={diffStyle === "split" ? "active" : ""} onClick={() => setDiffStyle("split")}>
+              <Columns2 size={16} />
+            </IconButton>
             <button className="button secondary workspace-action"
               disabled={selectedChange?.status === "deleted"} onClick={() => openFile(diff.path)}>Edit file</button>
           </div>}
@@ -198,7 +247,7 @@ export function ProjectWorkspacePanel({ project, request, theme }: {
         </> : <div className="workspace-empty"><FilePlus2 size={20} /><span>Select a file to edit.</span></div>
         : diff ? <>
           <div className="workspace-code"><Suspense fallback={<p className="workspace-message muted">Loading diff…</p>}>
-            <WorkspaceCode diff={diff} theme={theme} />
+            <WorkspaceCode diff={diff} theme={theme} diffStyle={diffStyle} />
           </Suspense></div>
         </> : <div className="workspace-empty"><span>{loading ? "Loading change…" : "Select a change to review."}</span></div>}
       </div>

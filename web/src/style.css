@@ -1040,6 +1040,7 @@ small {
   overflow: hidden;
   color: var(--text);
   background: var(--paper);
+  padding-top: var(--space-1);
 }
 .code-panel.open {
   margin: var(--space-2);
@@ -1050,7 +1051,8 @@ small {
   color: var(--muted);
   background: transparent;
 }
-.code-panel .icon-button:hover {
+.code-panel .icon-button:hover,
+.code-panel .icon-button.active {
   color: var(--text);
   background: var(--hover);
 }
@@ -1097,6 +1099,18 @@ small {
   font-size: var(--type-control);
   min-width: 0;
 }
+.code-panel .right-panel-heading {
+  justify-content: flex-end;
+  margin-bottom: var(--space-1);
+}
+@media (pointer: fine) {
+  .code-panel .right-panel-heading .icon-button {
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    min-height: 24px;
+  }
+}
 .workspace-browser {
   display: flex;
   flex: 1;
@@ -1113,6 +1127,7 @@ small {
 }
 .workspace-stage,
 .workspace-navigator {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -1127,10 +1142,22 @@ small {
   grid-column: 2;
   grid-row: 1;
   padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-small);
-  background: var(--sidebar);
+  border: 0;
+  border-radius: 0;
+  background: var(--paper);
   overflow: hidden;
+}
+.workspace-navigator-resize {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  z-index: 2;
+  cursor: col-resize;
+  touch-action: none;
+}
+.workspace-navigator-resize:hover,
+.workspace-navigator-resize:focus-visible {
+  background: var(--line);
 }
 .workspace-view-switch {
   display: flex;
@@ -1243,7 +1270,7 @@ small {
 .project-file-tree {
   flex: 1;
   min-height: 0;
-  --trees-bg-override: var(--sidebar);
+  --trees-bg-override: var(--paper);
   --trees-bg-muted-override: var(--hover);
   --trees-fg-override: var(--text);
   --trees-fg-muted-override: var(--muted);

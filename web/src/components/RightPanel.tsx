@@ -26,7 +26,7 @@ export function RightPanel({
   minWidth: number;
   open: boolean;
   storageKey: string;
-  title: string;
+  title?: string;
 }) {
   const clamp = (value: number) => clampPanelWidth(value, minWidth, maxWidth);
   const [width, setWidth] = useState(() => clamp(Number(localStorage.getItem(storageKey)) || defaultWidth));
@@ -74,7 +74,7 @@ export function RightPanel({
       }}
     />}
     <div className="right-panel-heading">
-      <h2 className="truncate">{title}</h2>
+      {title && <h2 className="truncate">{title}</h2>}
       <div className="right-panel-actions">
         {focusable && <IconButton label={focused ? "Exit code focus mode" : "Focus code workspace"}
           aria-pressed={focused} onClick={() => setFocused((value) => !value)}>

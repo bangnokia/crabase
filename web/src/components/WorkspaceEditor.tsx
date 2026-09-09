@@ -22,6 +22,7 @@ export default function WorkspaceEditor({
   const file = useMemo<FileContents>(() => ({ name: path, contents: value }), [path]);
   const options = useMemo<FileOptions<undefined, undefined>>(() => ({
     disableFileHeader: true,
+    unsafeCSS: ':host { --diffs-bg: var(--paper); } pre { --diffs-bg: var(--paper); }',
     overflow: "scroll",
     theme: theme === "dark" ? "pierre-dark" : "pierre-light",
     themeType: theme === "dark" ? "dark" : "light",
