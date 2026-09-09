@@ -12,6 +12,7 @@ composer install --working-dir=server
 npm run build
 cd server
 vendor/bin/phinx migrate
+php bin/create-admin.php  # First install only; prompts securely for credentials
 vendor/bin/phinx seed:run  # Optional: add this repository as a project
 php start.php start
 ```
@@ -22,9 +23,21 @@ For frontend development, keep PHP running and run `npm run dev` in another term
 
 If `codex` is not on PHP's PATH, set `CODEX_BIN` to its absolute executable path before starting PHP. Authentication and model defaults come from the local Codex CLI configuration. Run `codex login` separately if necessary. `CRABASE_DB` optionally overrides the SQLite path (mainly for isolated testing).
 
+## Accounts and first admin
+
+There is no public signup and no built-in/default password. After migrating, run `php server/bin/create-admin.php` from the repository root. It prompts for a unique display name, login email and password without echoing the password, and refuses to bootstrap a second enabled admin. Use a long, unique password (6–72 bytes accepted). Credentials are stored only as password hashes in the local database, not source files.
+
+Sign in, then use **Settings → Admin → Users** to list, create, edit, disable users or reset their passwords. The final enabled administrator cannot be disabled or demoted. Disabled accounts and password resets revoke their sessions. If all admins lose access, recover from a database backup or use a reviewed operator recovery procedure; there is no unauthenticated password-reset endpoint.
+
+**Settings → Profile** manages the display name, login email, avatar URL and optional Git author name/email. Changing login email or password requires the current password; changing a password signs the user out. Empty avatar URLs use Gravatar based on a hash of the login email, then initials if unavailable. Gravatar is a third-party service and receives the email hash and image request. Git emails can be GitHub-verified or `noreply` addresses; only configured participants receive agent-requested `Co-authored-by` trailers. These trailers are instructions to the agent, not a Git hook enforcing every manual commit.
+
+Sessions last seven days in HttpOnly, SameSite=Strict cookies. The HTTP shell/assets may load without login, but workspace data, WebSocket commands and artifact downloads require an enabled account. Login allows ten attempts per connection IP per fifteen minutes; loopback/SSH users share that limit. Cookies are intentionally non-Secure for this loopback HTTP setup; HTTPS deployment requires reviewed secure-cookie/origin configuration before exposure. OAuth2 is not implemented yet.
+
+Existing historical identities remain for message attribution but cannot sign in until an operator explicitly migrates them to accounts. The initial admin command creates a new user rather than silently granting access to historical identities.
+
 ## VPS setup
 
-Crabase currently has no real authentication or project authorization. Keep both listeners on loopback and connect through an SSH tunnel. Do not expose ports 8787 or 8788 through a public firewall, reverse proxy, or container port mapping.
+Crabase requires email/password login, but project authorization and OS/worktree isolation are not implemented. All enabled users are trusted collaborators with access to the shared workspace and its terminal. Keep both listeners on loopback and connect through an SSH tunnel. Do not expose ports 8787 or 8788 through a public firewall, reverse proxy, or container port mapping.
 
 ### 1. Install prerequisites
 
@@ -77,6 +90,7 @@ npm run build
 cd server
 vendor/bin/phinx migrate
 # Optional: vendor/bin/phinx seed:run
+php bin/create-admin.php  # First installation only
 php start.php start
 ```
 
@@ -184,7 +198,7 @@ Existing installations may retain the three getting-started conversations; fresh
 
 ## Current boundary
 
-This is a **local foundation**, not a production team deployment. Both PHP listeners bind to loopback and WebSocket origins are restricted to the local preview. All local browsers share one workspace. The display name is not authentication. Add team authentication, project membership/authorization, and a secure deployment configuration before exposing the app to other users.
+This is a **local foundation**, not a production team deployment. Both PHP listeners bind to loopback and WebSocket origins are restricted to the local preview. Email/password sessions protect workspace commands and artifact downloads. All signed-in users share one workspace, filesystem and terminal privileges; add project membership/authorization, isolation, TLS and a reviewed deployment configuration before public exposure.
 
 One Codex turn runs at a time across this instance to avoid concurrent agent edits. All chats in a project currently use its existing working directory; separate Git worktrees and isolated workers are not implemented yet. Direct edits by someone on the machine can still conflict with an agent's edits. Codex runs with `danger-full-access` and `never` approvals using the local account's credentials. Unsupported interactive server requests receive an explicit error; forms and other advanced desktop integrations are not implemented.
 
@@ -225,9 +239,11 @@ After static HTML/JS/CSS load, all workspace data and commands use one WebSocket
 
 Regular chats have no project. A project is any existing readable directory on the shared machine, whether or not it contains code or Git. Selecting a project starts its threads in that directory. Standalone agent chats use a private scratch directory under `server/runtime/chats/<chat-id>`. Existing project associations are preserved during migration.
 
-## Dummy users
+## Collaboration accounts
 
-Open `http://127.0.0.1:8787/?user=user1` and `http://127.0.0.1:8787/?user=user2` in separate tabs to test collaboration. Settings → **Test user for this tab** switches identities. The choice lives in sessionStorage, survives a reload, and does not change other tabs. The launch query is consumed so copying a chat link does not switch its recipient's identity. Notes, agent prompts, and their activity entries retain the selected author. These are local test identities, not authenticated accounts or access boundaries.
+Only administrators can register projects or browse the project-creation folder picker. Members can use existing projects and create chats within them.
+
+Create accounts in Settings → Admin → Users. Use separate browser profiles to test different signed-in users; tabs in the same browser profile share the session cookie. The old `?user=` switch is ignored. Messages and notes are attributed to the server-authenticated user.
 
 ## Model and reasoning
 
@@ -273,7 +289,7 @@ The initial table migrations can adopt the current pre-Phinx schema without rewr
 
 `server/app/model/` contains Webman Eloquent models: User, Project, Chat, Message, Job, Approval, Event, and Setting. Relationships connect projects to chats and users to their messages. `Actions` validates input and coordinates model operations; Phinx owns migrations. `config/database.php` uses SQLite with foreign keys and Webman's connection pool. Low-level streaming/queue SQL uses the same context connection through Store, preserving transactions and revision notifications.
 
-Users persist in SQLite with stable IDs, names, avatar URLs, and creation timestamps. Existing human message authors are backfilled into `messages.user_id`; the author text remains a historical snapshot. The message action requires a valid `user_id`. Profiles/avatars are pushed through workspace sync; avatar updates use the `userAvatar` action. Settings still switches local profiles without authentication. OAuth login and permissions are not implemented yet; do not expose the loopback service publicly.
+Users persist in SQLite with stable IDs, names, avatar URLs, and creation timestamps. Existing human message authors are backfilled into `messages.user_id`. The WebSocket boundary derives message identity from the authenticated session and ignores client `user_id`. Accounts contain private login and optional Git identity fields; workspace snapshots expose only public display identity. OAuth2 and project permissions are deferred; do not expose the loopback service publicly.
 
 ### Parallel agent chats
 

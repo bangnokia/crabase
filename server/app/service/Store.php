@@ -76,8 +76,14 @@ final class Store
             $chat['participants'] = json_decode($chat['participants'], true);
         }
         unset($chat);
+        $users = self::all('SELECT u.id,u.name,u.avatar_url,u.created_at,a.email FROM users u LEFT JOIN accounts a ON a.user_id=u.id ORDER BY u.name');
+        foreach ($users as &$user) {
+            if (!$user['avatar_url'] && $user['email']) $user['avatar_url'] = Auth::avatar($user['email']);
+            unset($user['email']);
+        }
+        unset($user);
         return [
-            'users' => User::query()->orderBy('name')->get()->toArray(),
+            'users' => $users,
             'agentName' => self::agentName(),
             'models' => json_decode(Setting::query()->whereKey('models')->value('value') ?? '[]', true),
             'projects' => self::all('SELECT *, rowid AS created_order FROM projects'),

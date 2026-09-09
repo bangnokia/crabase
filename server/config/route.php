@@ -1,5 +1,8 @@
 <?php
 use Webman\Route;
+Route::get('/auth/session', fn (\support\Request $request) => \app\service\AuthHttp::handle($request, 'session'));
+Route::post('/auth/login', fn (\support\Request $request) => \app\service\AuthHttp::handle($request, 'login'));
+Route::post('/auth/logout', fn (\support\Request $request) => \app\service\AuthHttp::handle($request, 'logout'));
 Route::get('/', function () {
     $index = public_path() . '/index.html';
     return is_file($index) ? response(file_get_contents($index))->header('Content-Type', 'text/html; charset=utf-8') : response('Build the frontend with npm run build, or open http://127.0.0.1:5173 during development.');
@@ -9,6 +12,7 @@ Route::get('/chat/{id}', function () {
     return is_file($index) ? response(file_get_contents($index))->header('Content-Type', 'text/html; charset=utf-8') : response('Build the frontend first.');
 });
 Route::get('/files/{chatId}/{name}', function (\support\Request $request, string $chatId, string $name) {
+    if (!\app\service\Auth::user($request->cookie(\app\service\Auth::COOKIE))) return response('Authentication required', 401);
     if (!in_array(explode(':', $request->host())[0], ['localhost','127.0.0.1'], true) || $request->header('sec-fetch-site') === 'cross-site') return response('Forbidden', 403);
     $file = \app\service\Artifacts::resolve($chatId, $name);
     if (!$file) return response('Output file not found.', 404);

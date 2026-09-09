@@ -20,6 +20,7 @@ import { clampSidebarWidth } from "../lib/layout";
 import { sortProjects, type ProjectSort } from "../lib/projects";
 type Props = {
   projects: Project[];
+  admin: boolean;
   chats: Chat[];
   selected: string;
   name: string;
@@ -57,18 +58,29 @@ function ChatLink({
           const title = event.currentTarget.querySelector<HTMLElement>(
             ".chat-title-text",
           )!;
-          const distance = title.parentElement!.clientWidth - title.scrollWidth;
+          const text = title.firstElementChild as HTMLElement;
+          title.toggleAttribute(
+            "data-overflow",
+            text.offsetWidth > title.parentElement!.clientWidth,
+          );
+          const distance = title.offsetWidth;
           title.style.setProperty(
             "--marquee-distance",
-            `${Math.min(0, distance)}px`,
+            `${-distance}px`,
           );
-          title.toggleAttribute("data-overflow", distance < 0);
+          title.style.setProperty(
+            "--marquee-duration",
+            `${distance / 40}s`,
+          );
         }}
         title={chat.title}
       >
         <AvatarStack users={chat.participants} avatars={avatars} />
         <span className="chat-title">
-          <span className="chat-title-text">{chat.title}</span>
+          <span className="chat-title-text">
+            <span>{chat.title}</span>
+            <span className="chat-title-repeat" aria-hidden="true">{chat.title}</span>
+          </span>
         </span>
       </button>
       <div className="chat-trailing">
@@ -92,6 +104,7 @@ function ChatLink({
 }
 export function Sidebar({
   projects,
+  admin,
   chats,
   selected,
   name,
@@ -170,12 +183,12 @@ export function Sidebar({
                   </MenuItem>
                 ))}
               </Menu>
-              <IconButton
+              {admin && <IconButton
                 label="Add project"
                 onClick={() => showDialog("project")}
               >
                 <Plus size={15} />
-              </IconButton>
+              </IconButton>}
             </div>
           </div>
           {projectsOpen && (

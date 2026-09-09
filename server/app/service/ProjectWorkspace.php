@@ -7,6 +7,7 @@ use app\model\Project;
 final class ProjectWorkspace
 {
     private const MAX_FILE_SIZE = 1000000;
+    private const MAX_PREVIEW_SIZE = 5000000;
 
     public static function snapshot(array $data): array
     {
@@ -25,10 +26,18 @@ final class ProjectWorkspace
         $root = self::root($data);
         $relative = self::relative($data['path'] ?? null);
         $path = self::resolvedFile($root, $relative);
-        if (filesize($path) > self::MAX_FILE_SIZE) throw new InvalidArgumentException('File is too large to preview.');
+        if (filesize($path) > self::MAX_PREVIEW_SIZE) {
+            return ['path'=>$relative, 'contents'=>'', 'hash'=>'', 'unsupported'=>'File is too large to preview (maximum 5 MB).'];
+        }
         $contents = file_get_contents($path);
-        if ($contents === false || str_contains($contents, "\0") || !preg_match('//u', $contents)) {
-            throw new InvalidArgumentException('Only text files can be previewed.');
+        $image = $contents === false ? false : @getimagesizefromstring($contents);
+        if ($image && in_array($image['mime'], ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif', 'image/bmp', 'image/x-icon'], true)) {
+            return ['path'=>$relative, 'contents'=>'', 'hash'=>hash('sha256', $contents),
+                'image'=>'data:'.$image['mime'].';base64,'.base64_encode($contents)];
+        }
+        if ($contents === false) throw new InvalidArgumentException('File is unreadable.');
+        if (str_contains($contents, "\0") || !preg_match('//u', $contents)) {
+            return ['path'=>$relative, 'contents'=>'', 'hash'=>'', 'unsupported'=>'Unsupported file'];
         }
         return ['path'=>$relative, 'contents'=>$contents, 'hash'=>hash('sha256', $contents)];
     }

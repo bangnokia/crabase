@@ -92,6 +92,13 @@ export function useWorkspace(selected: string) {
       socket.onmessage = (event) => {
         if (disposed) return;
         const packet = JSON.parse(event.data);
+        if (packet.type === "unauthorized") {
+          disposed = true;
+          rejectPending();
+          window.dispatchEvent(new Event('crabase:unauthorized'));
+          socket.close();
+          return;
+        }
         if (typeof packet.id === "number") {
           const entry = pending.current.get(packet.id);
           if (!entry) return;
@@ -134,10 +141,19 @@ export function useWorkspace(selected: string) {
           if (packet.approvals) setApprovals(packet.approvals);
         }
       };
-      socket.onclose = () => {
+      socket.onclose = async () => {
         if (disposed || socketRef.current !== socket) return;
         setLive(false);
         rejectPending();
+        try {
+          const response = await fetch('/auth/session', { credentials: 'same-origin' });
+          if (disposed) return;
+          if (response.status === 401) {
+            window.dispatchEvent(new Event('crabase:unauthorized'));
+            return;
+          }
+        } catch { /* Retry the socket when the server is temporarily unavailable. */ }
+        if (disposed) return;
         retry = setTimeout(connect, 1000);
       };
     }

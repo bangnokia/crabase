@@ -7,7 +7,8 @@ import "@fontsource/jetbrains-mono/latin-500.css";
 import "./styles/tokens.css";
 import "./style.css";
 import { App } from "./App";
+import { AuthGate } from "./components/AuthGate";
 
 createRoot(document.getElementById("root")!).render(
-  <App />,
+  <AuthGate><App /></AuthGate>,
 );

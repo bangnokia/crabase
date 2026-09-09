@@ -19,7 +19,7 @@ Projects are optional existing readable folders on the machine. Standalone chats
 - Model and reasoning selectors load from `model/list` on the persistent Codex app-server connection. Selections are stored with each queued job.
 - Typography uses rem tokens (1rem = 16px at the default root): navigation 0.875rem, messages/composer 1rem.
 - DM Sans is bundled locally through `@fontsource-variable/dm-sans`; chat/composer text is intentionally readable.
-- Dummy users: open `/?user=user1` and `/?user=user2` in separate browser tabs. The selected identity is kept in each tab’s sessionStorage.
+- Email/password login replaces browser-selected dummy identities. Historical authors remain preserved.
 
 ## Main files
 
@@ -60,7 +60,7 @@ If PHP cannot find Codex, set `CODEX_BIN` to the absolute executable path. Run `
 
 Read `design.md` before changing UI. Shared components use explicit typed props; the app owns mutations and the WebSocket hook owns transport. No router, state-management, or UI-kit dependency was added. Hidden recent-chat/suggestion/about/activity-page code and its styles were removed. Archive/restore remains available through the header; archived chats remain discoverable through search.
 
-Snapshot `chats[].participants` is now a JSON array of distinct human message/note authors. Guide/agent authors and invented default users are excluded. Avatar image URLs are keyed by author in localStorage and synchronized across tabs of the same browser; they are not server-side user profiles or account authentication.
+Snapshot `chats[].participants` is a JSON array of distinct human message/note authors. Guide/agent authors and invented default users are excluded. Avatars come from server profiles, with Gravatar fallback for accounts lacking a custom URL.
 
 The backend worker is not hot-reloadable. Restart PHP after backend changes when no turn is active, then verify the WebSocket command against the live worker.
 
@@ -89,13 +89,13 @@ Crabase explicitly starts and resumes Codex threads with `approvalPolicy=never` 
 
 ## Important boundaries
 
-This is a local foundation, not a network-ready team deployment. There is no real authentication, membership/authorization, or secure remote exposure. Users have persistent profiles but are not authenticated. Up to 12 chats run concurrently by default. Separate Git worktrees are not implemented. Advanced interactive app-server requests are not supported yet.
+This is a local foundation, not a network-ready team deployment. Email/password authentication is enforced, but project membership/authorization and secure remote exposure remain unimplemented. All authenticated users are trusted collaborators with shared filesystem/terminal access. Up to 12 chats run concurrently by default. Separate Git worktrees are not implemented. Advanced interactive app-server requests are not supported yet.
 
 Do not expose the loopback listeners publicly until authentication, authorization, TLS, origin policy, and workspace isolation are implemented.
 
 ## Suggested next work
 
-1. Add real user authentication and project membership checks.
+1. Add project membership checks; OAuth2 is deferred to a later task.
 2. Add explicit shared-chat participants and permissions for agent dispatch/approvals.
 3. Add per-task Git worktrees for isolated edits to the same project.
 4. Add browser E2E coverage for approval, cancellation, reconnect, and model selection.
@@ -128,7 +128,13 @@ Use `support\Model` via `webman/database`. Eight table models live in `app/model
 
 The unshipped combined baseline was split at the user's request. Version `20260909000000` remains applied on existing installs; the subsequent per-table files adopt existing tables without deleting rows. Users and message linkage are separate migrations ending in `000007` and `000008`. The pre-users backup is `server/runtime/before-users-20260909-015410.sqlite`.
 
-Users store id/name/avatar_url/created_at. The two existing profiles and distinct historical human authors were retained. New messages require a valid user_id; assistant/tool/guide rows have no human user. Names currently remain unique; revisit display-name vs provider identity when OAuth is implemented. Profiles are not authenticated accounts yet. Settings lists server users, and avatar changes persist via the userAvatar WebSocket action. Browser-local legacy avatar overrides are no longer read. OAuth is deferred as requested.
+Users store id/name/avatar_url/created_at. The two existing profiles and distinct historical human authors were retained. New messages derive user_id from the authenticated socket; assistant/tool/guide rows have no human user. Names remain unique. Accounts and sessions are separate from historical display identities. OAuth2 is deferred as requested.
+
+## Authentication and settings
+
+Migration `000009` adds accounts, hashed seven-day session tokens, and database-backed login throttling. `AuthHttp` handles login/logout/session endpoints with loopback host and exact Origin checks; cookies are HttpOnly and SameSite=Strict for the existing local HTTP setup. Artifacts and every WebSocket connection/action require an enabled session. Worker broadcasts recheck authentication and a two-second revocation sweep closes idle invalid sessions. Authentication does not provide OS/project isolation: every member is a trusted collaborator with shared terminal/file access.
+
+`AuthGate` mounts the workspace only after session verification. Settings uses the shared dialog with a small left nav: Profile, Appearance, Admin → Users. Profile saves and admin management use the existing request protocol, not refresh polling. Optional Git identity generates deduplicated agent coauthor instructions for the chat's human contributors; it does not intercept manual Git commits. Gravatar uses a SHA-256 email hash with a 404 fallback to initials. Admin bootstrap is `php server/bin/create-admin.php`; no credentials are seeded or committed. The requested initial admin has been created in the local database. Password resets and disabling revoke all affected sessions; the last enabled admin cannot be demoted/disabled. HTTP login, unauthorized downloads/sockets, impersonation, roles, hashes, expiry/revocation and migrations are covered by native PHP/Python checks.
 
 
 ## Open folder project picker
@@ -157,6 +163,8 @@ One `codex app-server` subprocess serves concurrent threads using JSON-RPC over 
 Cancellation and per-request RPC failures stay scoped to the owning job; a failed interrupt does not falsely finish a turn that may still be running. A shared app-server failure marks all active jobs failed, leaves queued jobs available for a new connection, and retries after a short delay. Worker restart similarly finalizes interrupted activity. `parallel_chats.php` uses a single deterministic fake app-server process to test concurrency, FIFO, stream isolation, approvals, cancellation, stale events, and process failure without model calls. The backend has been restarted with parallel scheduling and subagent event capture enabled.
 
 ## File palette
+
+The `projectFile` response also supports read-only raster image previews as validated image data URLs (within a 5 MB preview cap). Saves and diffs retain their 1 MB limit. Binary and oversized files return neutral unsupported-preview metadata for display inside their editor tab; invalid paths and unreadable files still fail. SVG stays editable text rather than executing as a document.
 
 Cmd/Ctrl+P in a project opens the code workspace and its file palette. `FilePalette` reuses the shared dialog and the existing `projectWorkspace` path list; filename-first fuzzy matching is local and capped at 50 displayed results. Trees' built-in search in the installed version is substring-only, so the palette uses the small tested `lib/file-search.ts` matcher. Choosing a result uses the same `openFile` path as the tree, preserving existing tabs, drafts, and backend validation. Standalone chats retain the browser shortcut.
 

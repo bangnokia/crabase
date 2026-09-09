@@ -8,7 +8,7 @@ import { clampPanelWidth } from "../lib/layout";
 const WorkspaceCode = lazy(() => import("./WorkspaceCode"));
 const WorkspaceEditor = lazy(() => import("./WorkspaceEditor"));
 
-type OpenFile = { path: string; contents: string; hash: string; draft: string };
+type OpenFile = { path: string; contents: string; hash: string; draft: string; image?: string; unsupported?: string };
 type Diff = { path: string; patch: string };
 
 export function ProjectWorkspacePanel({ project, request, theme, actions, fileSearch, closeFileSearch }: {
@@ -51,7 +51,7 @@ export function ProjectWorkspacePanel({ project, request, theme, actions, fileSe
     density: "compact",
     icons: { set: "complete", colored: false },
     initialExpansion: 1,
-    search: true,
+    search: false,
     flattenEmptyDirectories: true,
     onSelectionChange: (paths) => openFile(paths.at(-1) || ""),
   });
@@ -169,6 +169,11 @@ export function ProjectWorkspacePanel({ project, request, theme, actions, fileSe
     setSelectedChange(change);
     setSurface("diff");
   }
+  function closeDiff() {
+    setSelectedChange(undefined);
+    setDiff(undefined);
+    setSurface("file");
+  }
 
   return <section className="workspace-browser">
     {fileSearch && <FilePalette paths={workspace?.paths || []} loading={workspaceLoading} error={error}
@@ -224,15 +229,21 @@ export function ProjectWorkspacePanel({ project, request, theme, actions, fileSe
             </button></li>
           ))}</ul> : <p className="workspace-message muted">No changes.</p>}
       </aside>
-      {(files.length > 0 || selectedChange || fileLoading) && <div className="workspace-stage">
+      {(files.length > 0 || selectedChange || fileLoading) && <div className="workspace-stage"
+        onKeyDownCapture={(event) => {
+          if (!event.metaKey || event.ctrlKey || event.altKey || event.shiftKey ||
+            event.nativeEvent.isComposing || event.key.toLowerCase() !== "w") return;
+          if (surface === "diff" ? !selectedChange : !active) return;
+          event.preventDefault();
+          event.stopPropagation();
+          if (event.repeat) return;
+          if (surface === "diff") closeDiff();
+          else if (active) closeFile(active);
+        }}>
         <div className="workspace-stage-header">
           <FileTabs files={files} active={activePath} diff={selectedChange} surface={surface}
             select={openFile} close={closeFile} saving={pendingSaves.current}
-            selectDiff={() => { if (selectedChange) openChange(selectedChange); }} closeDiff={() => {
-              setSelectedChange(undefined);
-              setDiff(undefined);
-              setSurface("file");
-            }} />
+            selectDiff={() => { if (selectedChange) openChange(selectedChange); }} closeDiff={closeDiff} />
           {surface === "diff" && diff && <div className="workspace-stage-actions">
             <IconButton label="Unified diff" aria-pressed={diffStyle === "unified"}
               className={diffStyle === "unified" ? "active" : ""} onClick={() => setDiffStyle("unified")}>
@@ -246,7 +257,11 @@ export function ProjectWorkspacePanel({ project, request, theme, actions, fileSe
               disabled={selectedChange?.status === "deleted"} onClick={() => openFile(diff.path)}>Edit file</button>
           </div>}
         </div>
-        {surface === "file" ? active ? <>
+        {surface === "file" ? active ? active.unsupported ? <div className="workspace-empty" role="status">
+          <span>{active.unsupported}</span>
+        </div> : active.image ? <div className="workspace-image-preview">
+          <img src={active.image} alt={active.path} onError={() => setError(`Unable to display ${active.path}.`)} />
+        </div> : <>
           <div className="workspace-code"><Suspense fallback={<p className="workspace-message muted">Loading editor…</p>}>
             <WorkspaceEditor key={`${project.id}:${active.path}`} path={active.path} value={active.draft} theme={theme}
               change={(draft) => updateFile(active.path, (file) => ({ ...file, draft }))}

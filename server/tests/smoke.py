@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """Real WebSocket commands, two subscribers, simulated Codex delta, reconnect. No model calls."""
 import base64, json, os, socket, struct, subprocess, uuid, tempfile
+import atexit, urllib.request, urllib.error
 from pathlib import Path
 
 class Client:
-    def __init__(self, origin='http://127.0.0.1:8787'):
+    def __init__(self, origin='http://127.0.0.1:8787', cookie=''):
         self.socket = socket.create_connection(('127.0.0.1',8788),timeout=5)
         self.sequence, self.buffer, self.events = 0, b'', []
         key = base64.b64encode(os.urandom(16)).decode()
-        self.socket.sendall(f'GET / HTTP/1.1\r\nHost: 127.0.0.1:8788\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: {key}\r\nOrigin: {origin}\r\n\r\n'.encode())
+        self.socket.sendall(f'GET / HTTP/1.1\r\nHost: 127.0.0.1:8788\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: {key}\r\nOrigin: {origin}\r\nCookie: {cookie}\r\n\r\n'.encode())
         while b'\r\n\r\n' not in self.buffer:
             chunk = self.socket.recv(4096)
             if not chunk: raise ConnectionError('Handshake rejected')
@@ -49,13 +50,36 @@ class Client:
     def close(self):self.socket.close()
 
 if __name__=='__main__':
+    server = Path(__file__).resolve().parents[1]
+    accounts = json.loads(subprocess.check_output(['php','tests/auth-fixture.php'],cwd=server))
+    atexit.register(lambda: subprocess.run(['php','tests/auth-fixture.php','cleanup',*[a['id'] for a in accounts]],cwd=server,check=True))
+    cookies = []
+    for account in accounts:
+        request = urllib.request.Request('http://127.0.0.1:8787/auth/login', data=json.dumps(account).encode(), headers={'Content-Type':'application/json','Origin':'http://127.0.0.1:8787'})
+        with urllib.request.urlopen(request) as response:
+            cookie = response.headers['Set-Cookie']
+            assert 'HttpOnly' in cookie and 'SameSite=Strict' in cookie
+            cookies.append(cookie.split(';')[0])
+    try:
+        anonymous=Client(); anonymous.call('sync')
+        raise AssertionError('Anonymous WebSocket accepted')
+    except (ConnectionError,ConnectionResetError,BrokenPipeError): pass
+    finally:
+        if 'anonymous' in locals(): anonymous.close()
+    try:
+        urllib.request.urlopen('http://127.0.0.1:8787/files/anything/test.png')
+        raise AssertionError('Anonymous files accepted')
+    except urllib.error.HTTPError as error: assert error.code == 401
     try:
         rejected=Client('https://untrusted.example');rejected.call('sync')
         raise AssertionError('Untrusted origin accepted')
     except (ConnectionError,ConnectionResetError,BrokenPipeError):pass
     finally:
         if 'rejected' in locals():rejected.close()
-    first,second=Client(),Client()
+    first,second=Client(cookie=cookies[0]),Client(cookie=cookies[1])
+    second.call('usersList',error=True)
+    second.call('projectFolders',error=True)
+    second.call('project',{'path':'/'},error=True)
     state=first.call('sync')['state']; users={u['name']:u['id'] for u in state['users']}; assert state['projects'] and state['chats']
     workspace=first.call('projectWorkspace', {'project_id':state['projects'][0]['id']})
     assert set(workspace)=={'paths','git','branch','changes'}
@@ -75,17 +99,17 @@ if __name__=='__main__':
         body='Live note '+uuid.uuid4().hex
         first.call('message',{'chat_id':chat,'body':body,'mode':'note','user_id':users['user1']})
         update=second.patch('messages');assert update['chat_id']==chat and update['messages'][0]['body']==body
-        assert update['messages'][0]['author']=='user1'
+        assert update['messages'][0]['author']==accounts[0]['name'], 'Client-supplied identity was trusted'
         message_id=update['messages'][0]['id']
         # Use the same Store append as Codex, targeting only our disposable test note.
         subprocess.run(['php','-r',"require 'vendor/autoload.php'; app\\service\\Store::run('UPDATE messages SET body=body || ? WHERE id=?', [' streamed', (int)$argv[1]]);",str(message_id)],cwd=Path(__file__).resolve().parents[1],check=True)
         delta=second.patch('append');assert delta['append']==[{'id':message_id,'delta':' streamed'}]
         assert 'messages' not in delta and 'state' not in delta,'Delta resent history or workspace'
-        second.close();second=Client();restored=second.call('sync',{'chat_id':chat})['thread']
+        second.close();second=Client(cookie=cookies[1]);restored=second.call('sync',{'chat_id':chat})['thread']
         assert restored['messages'][0]['body']==body+' streamed' and restored['chat']['thread_id'] is None
         second.call('message',{'chat_id':chat,'body':'Reply from second test user','mode':'note','user_id':users['user2']})
         both=first.call('sync',{'chat_id':chat})['thread']['messages']
-        assert [m['author'] for m in both]==['user1','user2']
+        assert [m['author'] for m in both]==[a['name'] for a in accounts]
         # Publishing pushes the file list to subscribers and survives reconnect/sync.
         with tempfile.TemporaryDirectory() as temp:
             source=Path(temp)/'report.csv'; source.write_text('name,value\ntest,1\n')

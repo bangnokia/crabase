@@ -40,10 +40,23 @@ try {
         try { W::file($data + ['path'=>$path]); throw new RuntimeException('Invalid path accepted.'); }
         catch (InvalidArgumentException) {}
     }
-    echo "PASS: project file listing, Git status and diffs, text previews, and path boundaries.\n";
+    $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j5XcAAAAASUVORK5CYII=');
+    file_put_contents($root.'/project/image.png', $png);
+    $preview = W::file($data + ['path'=>'image.png']);
+    workspaceCheck($preview['image'] === 'data:image/png;base64,'.base64_encode($png));
+    workspaceCheck($preview['contents'] === '' && $preview['hash'] === hash('sha256', $png));
+    file_put_contents($root.'/project/image.png', "not an image\0");
+    workspaceCheck(W::file($data + ['path'=>'image.png'])['unsupported'] === 'Unsupported file');
+    file_put_contents($root.'/project/image.png', str_repeat('x', 5000000));
+    clearstatcache();
+    workspaceCheck(strlen(W::file($data + ['path'=>'image.png'])['contents']) === 5000000);
+    file_put_contents($root.'/project/image.png', str_repeat('x', 5000001));
+    clearstatcache();
+    workspaceCheck(isset(W::file($data + ['path'=>'image.png'])['unsupported']));
+    echo "PASS: project file listing, Git status and diffs, text/image previews, and path boundaries.\n";
 } finally {
     if (is_link($root.'/project/escape')) unlink($root.'/project/escape');
-    foreach ([$root.'/project/new.php',$root.'/project/readme.md'] as $file) if (is_file($file)) unlink($file);
+    foreach ([$root.'/project/new.php',$root.'/project/readme.md',$root.'/project/image.png'] as $file) if (is_file($file)) unlink($file);
     $git = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root.'/project/.git', FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);
     foreach ($git as $item) $item->isDir() ? rmdir($item->getPathname()) : unlink($item->getPathname());
     if (is_dir($root.'/project/.git')) rmdir($root.'/project/.git');

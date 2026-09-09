@@ -3,6 +3,7 @@
 namespace app\process;
 
 use app\service\Store;
+use app\service\Auth;
 use Workerman\Timer;
 use Workerman\Worker;
 use Workerman\Connection\TcpConnection;
@@ -51,6 +52,14 @@ final class Codex
             $this->tick();
             $this->publish();
         });
+        Timer::add(2, function () {
+            foreach ($this->clients as $id => $client) {
+                if (!Auth::user($client['token']) && isset($this->worker->connections[$id])) {
+                    $this->reply($this->worker->connections[$id], ['type'=>'unauthorized']);
+                    $this->worker->connections[$id]->close();
+                }
+            }
+        });
     }
 
     public function onWebSocketConnect(TcpConnection $connection, Request $request): void
@@ -60,8 +69,14 @@ final class Codex
             $connection->close();
             return;
         }
+        $token = $request->cookie(Auth::COOKIE);
+        if (!Auth::user($token)) {
+            $this->reply($connection, ['type'=>'unauthorized']);
+            $connection->close();
+            return;
+        }
         $connection->onBufferFull = fn () => $connection->close();
-        $this->clients[$connection->id] = ['chat_id' => null,'state' => null,'thread' => null];
+        $this->clients[$connection->id] = ['token'=>$token, 'chat_id' => null,'state' => null,'thread' => null];
     }
 
     private function reply(TcpConnection $connection, array $message): void
@@ -80,6 +95,12 @@ final class Codex
         }
         $id = null;
         try {
+            $actor = Auth::user($this->clients[$connection->id]['token']);
+            if (!$actor) {
+                $this->reply($connection, ['type'=>'unauthorized']);
+                $connection->close();
+                return;
+            }
             if (strlen($data) > 100000) {
                 throw new \InvalidArgumentException('Request too large.');
             }
@@ -99,12 +120,23 @@ final class Codex
                 $chatId = empty($m['data']['chat_id']) ? null : Store::text($m['data']['chat_id'], 64);
                 $thread = $chatId ? Store::thread($chatId) : null;
                 $state = Store::snapshot();
-                $this->clients[$connection->id] = ['chat_id' => $chatId,'state' => $state,'thread' => $thread];
+                $this->clients[$connection->id] = ['token'=>$this->clients[$connection->id]['token'], 'chat_id' => $chatId,'state' => $state,'thread' => $thread];
                 $result = ['state' => $state,'thread' => $thread,'terminals' => $this->terminalList($chatId)];
             } elseif (str_starts_with($m['action'], 'terminal')) {
                 $result = $this->terminalAction($connection, $m['action'], $m['data']);
             } else {
-                $result = \app\service\Actions::handle($m['action'], $m['data']);
+                $m['data']['user_id'] = $actor['id'];
+                $result = match ($m['action']) {
+                    'profile' => ['user'=>$actor],
+                    'project', 'projectFolders' => $actor['admin']
+                        ? \app\service\Actions::handle($m['action'], $m['data'])
+                        : throw new \InvalidArgumentException('Administrator access required to create projects.'),
+                    'profileSave' => Auth::update($actor, $m['data'], false),
+                    'usersList' => ['users'=>Auth::users($actor)],
+                    'userCreate' => $actor['admin'] ? Auth::create($m['data']) : throw new \InvalidArgumentException('Administrator access required.'),
+                    'userUpdate' => Auth::update($actor, $m['data'], true),
+                    default => \app\service\Actions::handle($m['action'], $m['data']),
+                };
             }
             $this->reply($connection, ['id' => $id,'result' => $result]);
             $this->publish();
@@ -126,6 +158,13 @@ final class Codex
         $state = Store::snapshot();
         $threads = [];
         foreach ($this->clients as $id => &$client) {
+            if (!Auth::user($client['token'])) {
+                if (isset($this->worker->connections[$id])) {
+                    $this->reply($this->worker->connections[$id], ['type'=>'unauthorized']);
+                    $this->worker->connections[$id]->close();
+                }
+                continue;
+            }
             if ($client['state'] === null) {
                 continue;
             }
@@ -336,6 +375,7 @@ final class Codex
             $params = ['cwd' => $next['path'],'approvalPolicy' => 'never','sandbox' => 'danger-full-access',
                 'developerInstructions' => "Save user-facing deliverables in $outputDirectory. To publish any finished file, run $publishCommand ABSOLUTE_FILE_PATH (shell-quote the file path). This command registers files already in that directory or copies files from elsewhere, then returns JSON with the actual url. Always publish deliverables with this command and share the returned url verbatim using Markdown links, or image Markdown for raster images. If a skill saves elsewhere, publish that file with the same command. Do not invent download URLs or share filesystem paths. Keep normal project source edits in the project folder. Publish only requested deliverables, never secrets or credentials."];
 
+            $params['developerInstructions'] .= Auth::coauthors($next['chat_id']);
             if ($next['thread_id']) {
                 $params['threadId'] = $next['thread_id'];
             }
@@ -686,7 +726,7 @@ final class Codex
     {
         $packet += ['type' => 'terminal','chat_id' => $chatId];
         foreach ($this->clients as $id => $client) {
-            if ($client['chat_id'] === $chatId && isset($this->worker->connections[$id])) {
+            if ($client['chat_id'] === $chatId && isset($this->worker->connections[$id]) && Auth::user($client['token'])) {
                 $this->reply($this->worker->connections[$id], $packet);
             }
         }

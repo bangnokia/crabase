@@ -45,7 +45,7 @@ with tempfile.TemporaryDirectory(prefix='crabase-migrations-') as temp:
         assert db.execute("SELECT users.name FROM messages JOIN users ON users.id=messages.user_id").fetchall() == [('Historical person',)]
         assert db.execute('SELECT count(*) FROM users').fetchone() == (3,)
         assert 'user_id' in [c[1] for c in db.execute('PRAGMA table_info(messages)')]
-    phinx(path, 'rollback')
+    phinx(path, 'rollback', '-t', '20260909000007')
     with sqlite3.connect(path) as db:
         assert 'user_id' not in [c[1] for c in db.execute('PRAGMA table_info(messages)')]
     phinx(path, 'migrate')

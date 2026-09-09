@@ -42,6 +42,7 @@ export type User = {
   avatar_url: string;
   created_at: string;
 };
+export type Account = User & { email: string; admin: number; enabled: number; git_name: string; git_email: string };
 export type Snapshot = {
   users: User[];
   agentName: string;

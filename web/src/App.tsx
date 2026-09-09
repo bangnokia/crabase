@@ -1,4 +1,5 @@
 import { ProjectDialog } from "./components/ProjectDialog";
+import { useAuth } from "./components/AuthGate";
 import { useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { useRoute } from "./hooks/useRoute";
@@ -12,16 +13,18 @@ import { DetailsPanel } from "./components/DetailsPanel";
 import { CodePanel } from "./components/CodePanel";
 import { TerminalPanel } from "./components/TerminalPanel";
 import { Composer, type SendOptions } from "./components/Composer";
-import { SearchDialog, SettingsDialog } from "./components/WorkspaceDialogs";
+import { SearchDialog } from "./components/WorkspaceDialogs";
+import { SettingsDialog } from "./components/SettingsDialog";
 import { NewChatPage } from "./pages/NewChatPage";
 import { ChatPage } from "./pages/ChatPage";
 export function App() {
+  const { user } = useAuth();
   const { route, navigate } = useRoute();
   const selected = route.page === "chat" ? route.id : "";
   const workspace = useWorkspace(selected);
   const { data, live, loaded, messages, approvals, error, setError, request } =
     workspace;
-  const preferences = usePreferences(data.users, request);
+  const preferences = usePreferences(data.users);
   const [projectId, setProjectId] = useState("");
   const [draftVersion, setDraftVersion] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -186,6 +189,7 @@ export function App() {
         Skip to conversation
       </a>
       <Sidebar
+        admin={!!user.admin}
         projects={data.projects}
         chats={data.chats}
         selected={selected}
@@ -290,7 +294,7 @@ export function App() {
           close={() => setDialog("")}
         />
       )}
-      {dialog === "project" && (
+      {dialog === "project" && !!user.admin && (
         <ProjectDialog
           request={request}
           added={(id) => {
@@ -302,7 +306,7 @@ export function App() {
       )}
       {dialog === "settings" && (
         <SettingsDialog
-          users={data.users}
+          request={request}
           {...preferences}
           close={() => setDialog("")}
         />
