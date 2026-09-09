@@ -40,7 +40,7 @@ Keep the existing warm neutral palette. Most hierarchy should come from position
 
 Use bundled DM Sans for application text. Use bundled DM Mono for terminal/tool output, code, commands, and paths, with system monospace fallbacks. Do not load a new font service.
 
-All font sizes use semantic `rem` tokens. At the browser’s default root size, **1rem = 16px**. Keep the root at `100%` so browser text-size preferences remain effective. Do not add 13px/15px font sizes or per-component pixel overrides.
+All font sizes use semantic `rem` tokens. At the browser’s default root size, **1rem = 16px**. Keep the root at `100%` so browser text-size preferences remain effective. Use the message token for 14px conversation text; do not add per-component pixel overrides.
 
 | Role | Token | Size | Default equivalent |
 | --- | --- | --- | --- |
@@ -48,7 +48,8 @@ All font sizes use semantic `rem` tokens. At the browser’s default root size, 
 | Supporting metadata | `--type-meta` | 0.75rem | 12px |
 | Navigation and compact labels | `--type-label` | 0.875rem | 14px |
 | Controls | `--type-control` | 0.875rem | 14px |
-| Messages and composer | `--type-body` | 1rem | 16px |
+| Message text | `--type-message` | 0.875rem | 14px |
+| Body and composer | `--type-body` | 1rem | 16px |
 | Dialog/section headings | `--type-section` | 1.25rem | 20px |
 | Mobile new-chat heading | `--type-title-mobile` | 1.75rem | 28px |
 | Desktop new-chat heading | `--type-title` | 2rem | 32px |
@@ -126,7 +127,7 @@ Use 6–8px radii for rows and controls, 16–20px for the composer and dialogs,
 ### Conversation
 
 - Agent messages align left; human messages and notes align right, with readable text and clear authorship.
-- Keep avatar and author as one compact group. Place the timestamp below the message body, aligned right for human messages. Reveal it on message hover or focus within; retain its layout space to prevent jumping. Mark notes with a quiet “Note” label.
+- Keep avatar and author as one compact group. Place one timestamp below each consecutive assistant/tool response group, after all tool calls; human messages retain their own right-aligned timestamp. Reveal it on group hover or focus within; retain its layout space to prevent jumping. Mark notes with a quiet “Note” label.
 - Do not restore the removed chat heading, “Chat · time” row, or bottom status bar.
 - Keep terminal output and file details in disclosures. Make approvals visible and specific enough to support a decision.
 - Streaming must not steal the reader’s scroll position when they scroll upward. Resume following only when they return to the bottom or explicitly request it.

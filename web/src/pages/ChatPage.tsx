@@ -5,6 +5,7 @@ import type { Approval, Avatars, Chat, Message } from "../types";
 import { Avatar } from "../components/Avatar";
 import { Crab } from "../components/Crab";
 import { time } from "../lib/format";
+import { groupConversationMessages } from "../lib/messages";
 function MessageItem({
   message,
   agentName,
@@ -20,10 +21,10 @@ function MessageItem({
       <article className="message tool">
         <details className="tool-output">
           <summary>
-            <Terminal size={15} />
-            <span>{message.author}</span>
-            <code>{message.body.split("\n")[0].slice(0, 90)}</code>
-            <ChevronDown size={14} />
+            <Terminal size={14} aria-hidden="true" />
+            <span>{message.author === "Terminal" ? "Command" : message.author}</span>
+            <code>{message.body.split("\n")[0]}</code>
+            <ChevronDown size={12} aria-hidden="true" />
           </summary>
           <pre>{message.body}</pre>
         </details>
@@ -52,9 +53,6 @@ function MessageItem({
             : message.body) || "…"}
         </MessageContent>
       </div>
-      <time className="message-time" dateTime={message.created_at}>
-        {time(message.created_at)}
-      </time>
     </article>
   );
 }
@@ -87,7 +85,7 @@ export function ChatPage({
   decide: (id: number, decision: "accept" | "decline") => void;
   children: ReactNode;
 }) {
-  const conversationMessages = messages.filter((message) => message.role !== "agent_activity");
+  const messageGroups = groupConversationMessages(messages);
   const scroll = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   useEffect(() => {
@@ -126,15 +124,24 @@ export function ChatPage({
               Loading chat…
             </p>
           )}
-          {loaded && !conversationMessages.length && (
+          {loaded && !messageGroups.length && (
             <p className="muted">Start the conversation below.</p>
           )}
-          {conversationMessages.map((message) => (
-            <MessageItem
-              key={message.id}
-              {...{ message, agentName, avatars }}
-            />
-          ))}
+          {messageGroups.map((group) => {
+            const first = group[0];
+            const last = group[group.length - 1];
+            const human = first.role === "user" || first.role === "note";
+            return (
+              <div className={`message-group ${human ? "human" : "agent"}`} key={first.id}>
+                {group.map((message) => (
+                  <MessageItem key={message.id} {...{ message, agentName, avatars }} />
+                ))}
+                <time className="message-time" dateTime={last.created_at}>
+                  {time(last.created_at)}
+                </time>
+              </div>
+            );
+          })}
           {approvals.map((approval) => (
             <section
               className="approval"

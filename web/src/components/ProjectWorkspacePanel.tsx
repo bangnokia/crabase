@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { Columns2, Rows2, FilePlus2, Files as FilesIcon, GitCompareArrows, RefreshCw, X } from "lucide-react";
 import { FileTree, useFileTree } from "@pierre/trees/react";
 import type { Project, ProjectWorkspace, Request, WorkspaceChange } from "../types";
@@ -267,7 +267,25 @@ function FileTabs({ files, active, diff, surface, select, close, saving, selectD
   selectDiff: () => void;
   closeDiff: () => void;
 }) {
-  return <nav className="workspace-editor-tabs" aria-label="Open files">
+  const tabsRef = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const strip = tabsRef.current;
+    const tab = strip?.querySelector<HTMLElement>('[data-active="true"]');
+    if (!strip || !tab) return;
+    const reveal = () => {
+      const viewport = strip.getBoundingClientRect();
+      const bounds = tab.getBoundingClientRect();
+      if (bounds.left < viewport.left) strip.scrollLeft += bounds.left - viewport.left;
+      else if (bounds.right > viewport.right) strip.scrollLeft += bounds.right - viewport.right;
+    };
+    reveal();
+    const observer = new ResizeObserver(reveal);
+    observer.observe(strip);
+    observer.observe(tab);
+    return () => observer.disconnect();
+  }, [active, surface, diff?.path, files.length]);
+
+  return <nav ref={tabsRef} className="workspace-editor-tabs" aria-label="Open files">
     {files.map((file) => <div className="workspace-editor-tab" data-active={surface === "file" && file.path === active} key={file.path}>
       <button onClick={() => select(file.path)} title={file.path}>
         <span className="truncate">{file.path.split("/").pop()}</span>

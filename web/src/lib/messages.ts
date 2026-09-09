@@ -1,4 +1,16 @@
 import type { Message } from "../types";
+export function groupConversationMessages(messages: Message[]) {
+  const groups: Message[][] = [];
+  const isAgent = (message: Message) => ["assistant", "tool"].includes(message.role);
+  for (const message of messages) {
+    if (message.role === "agent_activity") continue;
+    const previous = groups[groups.length - 1];
+    if (previous && isAgent(previous[0]) && isAgent(message)) previous.push(message);
+    else groups.push([message]);
+  }
+  return groups;
+}
+
 export function applyMessagePatch(
   previous: Message[],
   updates: Message[] = [],
