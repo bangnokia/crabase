@@ -14,6 +14,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [oauth, setOauth] = useState(false);
+  const [passwordLogin, setPasswordLogin] = useState(false);
   const [avatarCheck, setAvatarCheck] = useState<{ id: string; source: string; available: boolean } | null>(null);
   const avatarSource = user?.avatar_url || user?.avatar_fallback || '';
   useEffect(() => {
@@ -48,6 +49,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     const response = await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' });
     if (!response.ok) throw new Error('Unable to sign out. Try again.');
     setUser(null);
+    setPasswordLogin(false);
   }
   if (!loaded) return <div className="login-page" role="status">Loading…</div>;
   if (user) {
@@ -69,11 +71,15 @@ export function AuthGate({ children }: { children: ReactNode }) {
     finally { setBusy(false); }
   }}>
     <h1>Sign in to Crabase</h1>
+    {oauth && <a className="button primary" href="http://127.0.0.1:8787/auth/oauth/start">Sign in with TDA</a>}
+    {oauth && <button type="button" className="text-button" aria-expanded={passwordLogin} aria-controls="password-login" onClick={() => { setPasswordLogin(!passwordLogin); setError(''); }}>
+      {passwordLogin ? 'Hide email and password' : 'Use email and password'}
+    </button>}
+    {(!oauth || passwordLogin) && <div id="password-login" className="login-form">
     <label>Email<input name="email" type="email" autoComplete="username" required autoFocus /></label>
     <label>Password<input name="password" type="password" autoComplete="current-password" required /></label>
+    <button className={`button ${oauth ? 'secondary' : 'primary'}`} disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
+    </div>}
     <ErrorNotice message={error} />
-    <button className="button primary" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
-    {oauth && <a className="button secondary" href="http://127.0.0.1:8787/auth/oauth/start">Sign in with TDA</a>}
-    <p className="muted">Ask your administrator for an account.</p>
   </form></main>;
 }
