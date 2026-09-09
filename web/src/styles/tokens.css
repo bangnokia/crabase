@@ -6,6 +6,7 @@
     "DM Sans Variable", "DM Sans", -apple-system, BlinkMacSystemFont,
     "Segoe UI", sans-serif;
   --font-mono: "DM Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-editor: "JetBrains Mono", var(--font-mono);
   --surface: #faf9f6;
   --sidebar: #f0efec;
   --paper: #ffffff;

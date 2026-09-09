@@ -1120,7 +1120,7 @@ small {
 }
 .workspace-split {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  grid-template-columns: minmax(200px, 1fr) minmax(0, min(var(--navigator-width, 280px), 50%));
   flex: 1;
   min-width: 0;
   min-height: 0;
@@ -1325,7 +1325,7 @@ small {
   border-radius: 0;
   background: var(--paper);
   font: var(--weight-regular) var(--type-label) / 1.6 var(--font-mono);
-  --diffs-font-family: var(--font-mono);
+  --diffs-font-family: var(--font-editor);
   --diffs-header-font-family: var(--font-sans);
   --diffs-font-size: var(--type-label);
   --diffs-min-number-column-width: 3ch;
