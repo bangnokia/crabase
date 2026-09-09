@@ -9,6 +9,7 @@ import { chatPath } from "./lib/routes";
 import { Sidebar } from "./components/Sidebar";
 import { Header } from "./components/Header";
 import { DetailsPanel } from "./components/DetailsPanel";
+import { CodePanel } from "./components/CodePanel";
 import { TerminalPanel } from "./components/TerminalPanel";
 import { Composer, type SendOptions } from "./components/Composer";
 import { SearchDialog, SettingsDialog } from "./components/WorkspaceDialogs";
@@ -31,8 +32,11 @@ export function App() {
     "",
   );
   const [sidebar, setSidebar] = useState(false);
-  const [sidebarHidden, setSidebarHidden] = useState(false);
-  const [details, setDetails] = useState(false);
+  const [sidebarHidden, setSidebarHidden] = useState(
+    () => localStorage.getItem("crabase-sidebar-hidden") === "true",
+  );
+  const [details, setDetails] = useState(() => localStorage.getItem("crabase-details-open") === "true");
+  const [code, setCode] = useState(() => localStorage.getItem("crabase-code-open") === "true");
   const [terminal, setTerminal] = useState(false);
   const [toast, setToast] = useState("");
   const chat = data.chats.find((item) => item.id === selected);
@@ -90,6 +94,11 @@ export function App() {
     const timer = setTimeout(() => setToast(""), 2600);
     return () => clearTimeout(timer);
   }, [toast]);
+  useEffect(() => {
+    localStorage.setItem("crabase-sidebar-hidden", String(sidebarHidden));
+  }, [sidebarHidden]);
+  useEffect(() => localStorage.setItem("crabase-details-open", String(details)), [details]);
+  useEffect(() => localStorage.setItem("crabase-code-open", String(code)), [code]);
   async function act(action: string, body: unknown) {
     setError("");
     try {
@@ -186,6 +195,8 @@ export function App() {
           }}
           toggleDetails={() => setDetails(!details)}
           detailsOpen={details}
+          toggleCode={() => setCode((visible) => !visible)}
+          codeOpen={code}
           toggleTerminal={() => setTerminal((visible) => !visible)}
           terminalOpen={terminal}
           copy={() =>
@@ -237,9 +248,12 @@ export function App() {
           />
         )}
       </main>
+      {project && <CodePanel project={project} request={request} theme={preferences.theme}
+        open={code} close={() => setCode(false)} />}
       <DetailsPanel
         artifacts={workspace.artifacts}
         messages={messages}
+        project={project}
         chatSelected={!!selected}
         loaded={loaded}
         open={details}

@@ -7,6 +7,7 @@ return [
         'migrations' => __DIR__.'/database/migrations',
         'seeds' => __DIR__.'/database/seeds',
     ],
+
     'environments' => [
         'default_migration_table' => 'phinxlog',
         'default_environment' => 'workspace',

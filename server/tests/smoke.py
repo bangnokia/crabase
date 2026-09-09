@@ -57,6 +57,8 @@ if __name__=='__main__':
         if 'rejected' in locals():rejected.close()
     first,second=Client(),Client()
     state=first.call('sync')['state']; users={u['name']:u['id'] for u in state['users']}; assert state['projects'] and state['chats']
+    workspace=first.call('projectWorkspace', {'project_id':state['projects'][0]['id']})
+    assert set(workspace)=={'paths','git','branch','changes'}
     folders=first.call('projectFolders')
     assert folders['parent'] is None and all(not f['name'].startswith('.') for f in folders['folders'])
     first.call('projectFolders', {'path':'/does-not-exist-crabase'}, error=True)

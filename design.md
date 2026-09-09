@@ -188,7 +188,9 @@ The right sidebar exposes an Artifacts section for the selected chat, with compa
 
 The top bar is 48px tall and has no archive action. Omit the composer keyboard-hint footer; Enter/Shift+Enter behavior remains unchanged.
 
-The right sidebar stays in the shell flex layout at every viewport size, taking up to 280px (40vw on narrow screens). Opening it reduces the chat width; it never overlays the conversation.
+The details sidebar stays in the shell flex layout and is independently resizable. Project chats add a separate code-workspace button immediately before the details toggle. Its resizable panel can stack beside details or focus across the chat area without covering the desktop workspace sidebar.
+
+The code workspace uses one compact tab row, a larger editable/review stage on the left, and a Files/Changes navigator on the right. File edits save when focus leaves the editor. Use Pierre Trees for navigation and Pierre Diffs for both editing and review so syntax, DM Mono typography, spacing, and themes stay consistent; do not add a second editor dependency.
 
 The right sidebar shows “Artifacts” and the current chat’s file list, followed by subagent activity when available. Omit workspace/project paths, agent runtime, recent activity, and duplicate section headings.
 

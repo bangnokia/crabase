@@ -104,9 +104,6 @@ final class Codex
             } elseif (str_starts_with($m['action'], 'terminal')) {
                 $result = $this->terminalAction($connection, $m['action'], $m['data']);
             } else {
-                if (!in_array($m['action'], ['projectFolders','userAvatar','projectContext','project','create','message','archive','cancel','approval'])) {
-                    throw new \InvalidArgumentException('Unknown action.');
-                }
                 $result = \app\service\Actions::handle($m['action'], $m['data']);
             }
             $this->reply($connection, ['id' => $id,'result' => $result]);

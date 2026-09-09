@@ -72,3 +72,16 @@ export type TerminalSession = {
   output: string;
   running: boolean;
 };
+
+export type WorkspaceChange = {
+  path: string;
+  status: "added" | "deleted" | "modified" | "renamed" | "untracked";
+  code: string;
+};
+
+export type ProjectWorkspace = {
+  paths: string[];
+  git: boolean;
+  branch: string | null;
+  changes: WorkspaceChange[];
+};

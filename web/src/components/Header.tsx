@@ -1,4 +1,4 @@
-import { Copy, PanelLeft, PanelRight, SquareTerminal } from "lucide-react";
+import { Copy, FileCode2, PanelLeft, PanelRight, SquareTerminal } from "lucide-react";
 import type { Chat, Project } from "../types";
 import { IconButton } from "./ui";
 export function Header({
@@ -8,6 +8,8 @@ export function Header({
   sidebarHidden,
   toggleDetails,
   detailsOpen,
+  toggleCode,
+  codeOpen,
   toggleTerminal,
   terminalOpen,
   copy,
@@ -18,6 +20,8 @@ export function Header({
   sidebarHidden: boolean;
   toggleDetails: () => void;
   detailsOpen: boolean;
+  toggleCode: () => void;
+  codeOpen: boolean;
   toggleTerminal: () => void;
   terminalOpen: boolean;
   copy: () => void;
@@ -58,9 +62,17 @@ export function Header({
             </IconButton>
           </>
         )}
+        {project && <IconButton
+          className={codeOpen ? "active" : ""}
+          label={`${codeOpen ? "Hide" : "Show"} code workspace`}
+          aria-pressed={codeOpen}
+          onClick={toggleCode}
+        >
+          <FileCode2 size={18} />
+        </IconButton>}
         <IconButton
           className={detailsOpen ? "active" : ""}
-          label="Artifacts and agent activity"
+          label={project ? "Project and chat details" : "Artifacts and agent activity"}
           aria-pressed={detailsOpen}
           onClick={toggleDetails}
         >

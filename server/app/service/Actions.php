@@ -42,6 +42,10 @@ final class Actions
         $result = match ($action) {
             'projectFolders' => WorkspaceFolders::listing($data),
             'projectContext' => self::projectContext($data),
+            'projectWorkspace' => ProjectWorkspace::snapshot($data),
+            'projectFile' => ProjectWorkspace::file($data),
+            'projectDiff' => ProjectWorkspace::diff($data),
+            'projectSave' => ProjectWorkspace::save($data),
             'project' => self::createProject($data),
             'create' => self::createChat($data),
             'message' => self::sendMessage($data),
@@ -51,7 +55,7 @@ final class Actions
             'userAvatar' => self::updateUserAvatar($data),
             default => throw new InvalidArgumentException('Unknown action.'),
         };
-        if (!in_array($action, ['projectContext', 'projectFolders'], true)) {
+        if (!in_array($action, ['projectContext', 'projectFolders', 'projectWorkspace', 'projectFile', 'projectDiff'], true)) {
             Store::notify();
         }
         return $result;
