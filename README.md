@@ -25,19 +25,33 @@ If `codex` is not on PHP's PATH, set `CODEX_BIN` to its absolute executable path
 
 ## Accounts and first admin
 
+### Prompt attachments
+
+Attach with the paperclip, drag files onto the composer, or paste clipboard images/files (when exposed by the browser). Ordinary text paste is unchanged. Each message accepts up to 10 files, 5 MB each; empty files are rejected. Upload chips show progress, removal and retry. Sending waits for all uploads, and failed sends keep the draft. Attachments also work for notes and new project-less chats.
+
+Uploads use small authenticated WebSocket chunks, staged privately under `.artifacts/.uploads`, with at most 30 pending files per user. Abandoned uploads expire after 24 hours and are cleaned hourly and on startup/upload. Sending moves each file once into `.artifacts/<chat-id>` and stores its original name and metadata on the message. Include `.artifacts` in backups. Supported raster images are sent to Codex as local image inputs (40-megapixel limit); other files are provided as paths for the agent to read, not automatically executed or parsed. HTML/SVG and other non-raster files download rather than render in the app. No OCR/document-conversion service is added.
+
+### First admin
+
 There is no public signup and no built-in/default password. After migrating, run `php server/bin/create-admin.php` from the repository root. It prompts for a unique display name, login email and password without echoing the password, and refuses to bootstrap a second enabled admin. Use a long, unique password (6–72 bytes accepted). Credentials are stored only as password hashes in the local database, not source files.
 
 Sign in, then use **Settings → Admin → Users** to list, create, edit, disable users or reset their passwords. The final enabled administrator cannot be disabled or demoted. Disabled accounts and password resets revoke their sessions. If all admins lose access, recover from a database backup or use a reviewed operator recovery procedure; there is no unauthenticated password-reset endpoint.
 
 **Settings → Profile** manages the display name, login email, avatar URL and optional Git author name/email. Changing login email or password requires the current password; changing a password signs the user out. Empty avatar URLs use Gravatar based on a hash of the login email, then initials if unavailable. Gravatar is a third-party service and receives the email hash and image request. Git emails can be GitHub-verified or `noreply` addresses; only configured participants receive agent-requested `Co-authored-by` trailers. These trailers are instructions to the agent, not a Git hook enforcing every manual commit.
 
-Sessions last seven days in HttpOnly, SameSite=Strict cookies. The HTTP shell/assets may load without login, but workspace data, WebSocket commands and artifact downloads require an enabled account. Login allows ten attempts per connection IP per fifteen minutes; loopback/SSH users share that limit. Cookies are intentionally non-Secure for this loopback HTTP setup; HTTPS deployment requires reviewed secure-cookie/origin configuration before exposure. OAuth2 is not implemented yet.
+Sessions last seven days in HttpOnly, SameSite=Strict cookies. The HTTP shell/assets may load without login, but workspace data, WebSocket commands and artifact downloads require an enabled account. Login allows ten attempts per connection IP per fifteen minutes; loopback/SSH users share that limit. Cookies are intentionally non-Secure for this loopback HTTP setup; HTTPS deployment requires reviewed secure-cookie/origin configuration before exposure. Optional TDA Passport OAuth2 is described below.
 
 Existing historical identities remain for message attribution but cannot sign in until an operator explicitly migrates them to accounts. The initial admin command creates a new user rather than silently granting access to historical identities.
 
+### TDA Passport OAuth2 (local deployment)
+
+Register the exact redirect URL `http://127.0.0.1:8787/auth/oauth/callback` with TDA Passport. Put `CRABASE_OAUTH_CLIENT_ID` and `CRABASE_OAUTH_CLIENT_SECRET` in the ignored `.env` (never frontend code or Git), migrate, and restart PHP. The login screen then offers **Sign in with TDA**. PHP cURL with TLS support is required. The authorization, token and user endpoints are fixed to `https://passport.tdagroup.online/oauth/authorize`, `/oauth/token`, and `/api/user` respectively.
+
+The integration uses authorization code + S256 PKCE, browser-bound one-use state (10-minute expiry), verified TLS, and server-side token exchange. Provider access tokens are used only to fetch the profile, then discarded. First login requires a top-level `id`, `email`, and either boolean `email_verified: true` or a non-null valid `email_verified_at` timestamp from `/api/user`, matching an existing enabled Crabase account. It never signs up users or changes their roles. Later logins use the stored provider ID binding. Password login remains available. Login completes on `127.0.0.1:8787`, including when initiated from Vite. The OAuth flow cookie is HttpOnly/SameSite=Lax so the provider redirect can complete; normal session cookies remain Strict. This fixed loopback callback is not public-deployment configuration.
+
 ## VPS setup
 
-Crabase requires email/password login, but project authorization and OS/worktree isolation are not implemented. All enabled users are trusted collaborators with access to the shared workspace and its terminal. Keep both listeners on loopback and connect through an SSH tunnel. Do not expose ports 8787 or 8788 through a public firewall, reverse proxy, or container port mapping.
+Crabase requires login through email/password or configured TDA Passport OAuth2, but project authorization and OS/worktree isolation are not implemented. All enabled users are trusted collaborators with access to the shared workspace and its terminal. Keep both listeners on loopback and connect through an SSH tunnel. Do not expose ports 8787 or 8788 through a public firewall, reverse proxy, or container port mapping.
 
 ### 1. Install prerequisites
 
@@ -289,7 +303,7 @@ The initial table migrations can adopt the current pre-Phinx schema without rewr
 
 `server/app/model/` contains Webman Eloquent models: User, Project, Chat, Message, Job, Approval, Event, and Setting. Relationships connect projects to chats and users to their messages. `Actions` validates input and coordinates model operations; Phinx owns migrations. `config/database.php` uses SQLite with foreign keys and Webman's connection pool. Low-level streaming/queue SQL uses the same context connection through Store, preserving transactions and revision notifications.
 
-Users persist in SQLite with stable IDs, names, avatar URLs, and creation timestamps. Existing human message authors are backfilled into `messages.user_id`. The WebSocket boundary derives message identity from the authenticated session and ignores client `user_id`. Accounts contain private login and optional Git identity fields; workspace snapshots expose only public display identity. OAuth2 and project permissions are deferred; do not expose the loopback service publicly.
+Users persist in SQLite with stable IDs, names, avatar URLs, and creation timestamps. Existing human message authors are backfilled into `messages.user_id`. The WebSocket boundary derives message identity from the authenticated session and ignores client `user_id`. Accounts contain private login and optional Git identity fields; workspace snapshots expose only public display identity. Optional TDA Passport OAuth2 links existing accounts. Project permissions remain deferred; do not expose the loopback service publicly.
 
 ### Parallel agent chats
 

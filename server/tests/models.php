@@ -66,6 +66,12 @@ try {
         rmdir($workspace.'/Folder name'); rmdir($workspace);
         putenv($previousRoot === false ? 'CRABASE_WORKSPACE_ROOT' : 'CRABASE_WORKSPACE_ROOT='.$previousRoot);
     }
+    $models[0]['supportedReasoningEfforts'][] = ['reasoningEffort'=>'ultra'];
+    $models[0]['defaultReasoningEffort'] = 'ultra';
+    S::run("UPDATE settings SET value=? WHERE key='models'", [json_encode($models)]);
+    check(A::agentOptions(['model'=>'test-model'])['effort'] === 'low');
+    try { A::agentOptions(['model'=>'test-model','effort'=>'ultra']); throw new RuntimeException('Ultra accepted'); }
+    catch (InvalidArgumentException) {}
     echo "PASS: model/effort validation, defaults, immutable queued selections, and rejection before saving.\n";
 } finally {
     foreach ([$path,$path.'-wal',$path.'-shm'] as $file) if (is_file($file)) unlink($file);

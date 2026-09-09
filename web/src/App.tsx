@@ -30,7 +30,9 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const sending = useRef(false);
   const draftRef = useRef("");
+  const draftChat = useRef('');
   function clearDraft() {
+    draftChat.current = '';
     draftRef.current = "";
     setDraftVersion((version) => version + 1);
   }
@@ -130,19 +132,19 @@ export function App() {
   }
   async function send(options: SendOptions) {
     const body = draftRef.current.trim();
-    if (!body || sending.current) return;
+    if ((!body && !options.attachments?.length) || sending.current) return false;
     sending.current = true;
     setBusy(true);
     setError("");
     try {
-      let id = selected;
+      let id = selected || draftChat.current;
       if (!id) {
         const result = await request<{ id: string }>("create", {
           project_id: projectId || null,
-          title: body.slice(0, 90),
+          title: body.slice(0, 90) || 'Attachments',
         });
         id = result.id;
-        navigate(chatPath(id));
+        draftChat.current = id;
       }
       await request("message", {
         ...options,
@@ -151,8 +153,11 @@ export function App() {
         user_id: data.users.find((user) => user.name === preferences.name)?.id,
       });
       if (draftRef.current.trim() === body) clearDraft();
+      if (!selected) navigate(chatPath(id));
+      return true;
     } catch (error) {
       setError((error as Error).message);
+      return false;
     } finally {
       sending.current = false;
       setBusy(false);

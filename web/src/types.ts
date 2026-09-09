@@ -19,6 +19,7 @@ export type Message = {
   role: string;
   author: string;
   body: string;
+  attachments?: Artifact[];
   created_at: string;
 };
 export type Approval = { id: number; method: string; details: string };

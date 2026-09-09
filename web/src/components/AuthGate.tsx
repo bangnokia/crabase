@@ -13,11 +13,13 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [oauth, setOauth] = useState(false);
   async function refresh() {
     const response = await fetch('/auth/session', { credentials: 'same-origin' });
-    if (response.status === 401) { setUser(null); return; }
-    if (!response.ok) throw new Error('Unable to check your session.');
-    setUser((await response.json()).user);
+    if (!response.ok && response.status !== 401) throw new Error('Unable to check your session.');
+    const result = await response.json();
+    setOauth(!!result.oauth);
+    setUser(result.user);
   }
   useEffect(() => {
     document.documentElement.dataset.theme = localStorage.getItem('crabase.theme') === 'dark' ? 'dark' : 'light';
@@ -52,6 +54,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     <label>Password<input name="password" type="password" autoComplete="current-password" required /></label>
     <ErrorNotice message={error} />
     <button className="button primary" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
+    {oauth && <a className="button secondary" href="http://127.0.0.1:8787/auth/oauth/start">Sign in with TDA</a>}
     <p className="muted">Ask your administrator for an account.</p>
   </form></main>;
 }

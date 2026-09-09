@@ -33,10 +33,16 @@ export function Menu({
   label,
   icon,
   children,
+  className = '',
+  disabled = false,
+  contentRole = 'menu',
 }: {
   label: string;
   icon: ReactNode;
   children: ReactNode;
+  className?: string;
+  disabled?: boolean;
+  contentRole?: 'menu' | 'dialog';
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -51,16 +57,19 @@ export function Menu({
   return (
     <div
       ref={ref}
-      className="menu"
+      className={`menu ${className}`}
+      onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}
       onKeyDown={(event) => {
         if (event.key !== "Escape") return;
+        event.stopPropagation();
         setOpen(false);
         ref.current?.querySelector<HTMLElement>(".icon-button")?.focus();
       }}
     >
       <IconButton
         label={label}
-        aria-haspopup="menu"
+        disabled={disabled}
+        aria-haspopup={contentRole}
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
@@ -68,7 +77,7 @@ export function Menu({
       </IconButton>
       {open && (
         <MenuClose.Provider value={() => setOpen(false)}>
-          <div className="menu-content" role="menu" aria-label={label}>
+          <div className="menu-content" role={contentRole} aria-label={label}>
             {children}
           </div>
         </MenuClose.Provider>

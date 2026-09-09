@@ -1,5 +1,7 @@
 <?php
 use Webman\Route;
+Route::get('/auth/oauth/start', fn (\support\Request $request) => \app\service\OAuth::start($request));
+Route::get('/auth/oauth/callback', fn (\support\Request $request) => \app\service\OAuth::callback($request));
 Route::get('/auth/session', fn (\support\Request $request) => \app\service\AuthHttp::handle($request, 'session'));
 Route::post('/auth/login', fn (\support\Request $request) => \app\service\AuthHttp::handle($request, 'login'));
 Route::post('/auth/logout', fn (\support\Request $request) => \app\service\AuthHttp::handle($request, 'logout'));

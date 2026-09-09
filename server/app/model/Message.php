@@ -8,7 +8,8 @@ final class Message extends Model
 {
     protected $table = 'messages';
     public $timestamps = false;
-    protected $fillable = ['chat_id', 'role', 'author', 'body', 'created_at', 'user_id'];
+    protected $fillable = ['chat_id', 'role', 'author', 'body', 'created_at', 'user_id', 'attachments'];
+    protected $casts = ['attachments' => 'array'];
 
     public function user(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {

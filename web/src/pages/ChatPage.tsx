@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { ChevronDown, Loader2, Terminal } from "lucide-react";
 import { MessageContent } from "../components/MessageContent";
+import { AttachmentList } from '../components/AttachmentList';
 import type { Approval, Avatars, Chat, Message } from "../types";
 import { Avatar } from "../components/Avatar";
 import { Crab } from "../components/Crab";
@@ -47,11 +48,12 @@ function MessageItem({
         )}
       </div>
       <div className="message-body">
-        <MessageContent>
+        <AttachmentList files={message.attachments || []} />
+        {(message.body || !message.attachments?.length) && <MessageContent>
           {(message.role === "guide"
             ? message.body.replaceAll("Codex", agentName)
             : message.body) || "…"}
-        </MessageContent>
+        </MessageContent>}
       </div>
     </article>
   );

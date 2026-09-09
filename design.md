@@ -122,7 +122,8 @@ Use 6–8px radii for rows and controls, 16–20px for the composer and dialogs,
 - While work can be cancelled, Stop replaces the send arrow in the same primary-action position. Never show Stop and Send together. Enter still sends another agent message while work is active, allowing sequential queued messages; the Stop button cancels active and queued requests.
 - Keep model and reasoning selectors compact, readable, and keyboard accessible. Use real backend model capabilities.
 - Preserve drafts on failure. Explain errors near the composer with a useful recovery action.
-- For a new project chat, show a shallow, quiet bar immediately above the input with the project name and current Git branch when available. Standalone chats have no project bar.
+- For a new project chat, show a shallow, quiet bar immediately above the input with the project name. Standalone chats have no project bar.
+- In all Git project chats, show a muted, read-only branch indicator immediately after reasoning. Show the short commit for detached HEAD; hover exposes the linked worktree name (when applicable) and working-directory path. Allow wrapping on narrow screens. Refresh through WebSocket on chat/activity changes and focus, not polling.
 - The project bar shares the input’s alignment and reads as part of the composer. Do not add environment labels, permission badges, or unavailable controls from reference screenshots.
 - Do not fabricate `main` when branch lookup fails. Distinguish a failed lookup from a folder without Git when recovery is useful.
 

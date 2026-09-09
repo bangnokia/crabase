@@ -11,6 +11,7 @@ final class Actions
     {
         $model = $data['model'] ?? null;
         $effort = $data['effort'] ?? null;
+        if ($effort === 'ultra') throw new InvalidArgumentException('Ultra reasoning is disabled.');
         if ($model === null) {
             if ($effort !== null) {
                 throw new InvalidArgumentException('Select a model before choosing reasoning.');
@@ -23,14 +24,15 @@ final class Actions
         if (!$selected) {
             throw new InvalidArgumentException('This model is not in the current Codex catalog. Refresh the model list.');
         }
-        $efforts = array_column($selected['supportedReasoningEfforts'], 'reasoningEffort');
+        $efforts = array_values(array_filter(array_column($selected['supportedReasoningEfforts'], 'reasoningEffort'), fn ($level) => $level !== 'ultra'));
         if (!$efforts) {
             if ($effort !== null) {
                 throw new InvalidArgumentException('This model does not offer reasoning levels.');
             }
             return ['model' => $model,'effort' => null];
         }
-        $effort ??= $selected['defaultReasoningEffort'] ?? null;
+        $default = $selected['defaultReasoningEffort'] ?? null;
+        $effort ??= in_array($default, $efforts, true) ? $default : ($efforts[0] ?? null);
         if ($effort !== null && !in_array($effort, $efforts, true)) {
             throw new InvalidArgumentException('This reasoning level is not supported by the selected model.');
         }
@@ -39,6 +41,7 @@ final class Actions
     public static function handle(string $action, array $data): array
     {
         Store::db();
+        if (in_array($action, ['uploadStart', 'uploadChunk', 'uploadRemove'], true)) return Attachments::handle($action, $data);
         $result = match ($action) {
             'projectFolders' => WorkspaceFolders::listing($data),
             'projectContext' => self::projectContext($data),
@@ -63,18 +66,7 @@ final class Actions
 
     public static function projectContext(array $data): array
     {
-        $id = Store::text($data['project_id'] ?? null, 64);
-        $project = Project::query()->find($id);
-        if (!$project) {
-            throw new InvalidArgumentException('Project not found.');
-        }
-        $process = proc_open(['git','-C',$project['path'],'symbolic-ref','--quiet','--short','HEAD'], [0 => ['file','/dev/null','r'],1 => ['pipe','w'],2 => ['file','/dev/null','w']], $pipes);
-        if (!is_resource($process)) {
-            return ['branch' => null];
-        }
-        $branch = trim(stream_get_contents($pipes[1]));
-        fclose($pipes[1]);
-        return ['branch' => proc_close($process) === 0 && $branch !== '' ? $branch : null];
+        return ProjectWorkspace::context($data);
     }
 
 
@@ -112,9 +104,13 @@ final class Actions
     {
         $chat = Chat::query()->find(Store::text($data['chat_id'] ?? null, 64)) ?? throw new InvalidArgumentException('Conversation not found.');
         $id = $chat['id'];
-        $body = Store::text($data['body'] ?? null);
+        $body = $data['body'] ?? '';
+        if (!is_string($body) || strlen($body) > 20000) throw new InvalidArgumentException('Message must be at most 20000 characters.');
+        $body = trim($body);
         $user = User::query()->find(Store::text($data['user_id'] ?? null, 64)) ?? throw new InvalidArgumentException('User not found.');
         $author = $user['name'];
+        $pending = Attachments::pending($data['attachments'] ?? [], $user->id);
+        if ($body === '' && !$pending) throw new InvalidArgumentException('Enter a message or attach a file.');
         $mode = $data['mode'] ?? 'note';
         if (!in_array($mode, ['note','agent'])) {
             throw new InvalidArgumentException('Unknown message mode.');
@@ -123,18 +119,21 @@ final class Actions
             throw new InvalidArgumentException('Restore this thread before sending a message.');
         }
         $options = $mode === 'agent' ? self::agentOptions($data) : ['model' => null,'effort' => null];
-        \support\Db::transaction(function () use ($chat, $id, $body, $user, $author, $mode, $options) {
+        $attachments = Attachments::move($pending, $id);
+        try { \support\Db::transaction(function () use ($chat, $id, $body, $user, $author, $mode, $options, $attachments) {
             $message = Message::query()->create([
                 'chat_id' => $id, 'role' => $mode === 'note' ? 'note' : 'user',
                 'author' => $author, 'body' => $body, 'created_at' => gmdate('c'), 'user_id' => $user->id,
+                'attachments' => $attachments,
             ]);
+            foreach ($attachments as $file) Store::run('DELETE FROM uploads WHERE id=?', [$file['id']], false);
             $chat->update(['updated_at' => gmdate('c')]);
             if ($mode === 'agent') {
                 Job::query()->create(['chat_id' => $id, 'prompt' => $body, 'model' => $options['model'], 'effort' => $options['effort'], 'message_id'=>$message->id]);
                 Chat::query()->whereKey($id)->where('status', 'idle')->update(['status' => 'queued']);
             }
             Store::event($id, $author . ($mode === 'agent' ? ' asked '.Store::agentName() : ' added a note'));
-        });
+        }); } catch (\Throwable $e) { Attachments::restore($attachments, $id); throw $e; }
         return ['ok' => true];
     }
 

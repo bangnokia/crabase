@@ -50,6 +50,18 @@ try {
     $expired = A::login(['email'=>'admin@example.com','password'=>'test-password'],'test');
     S::run('UPDATE auth_sessions SET expires=? WHERE token_hash=?',[time()-1,hash('sha256',$expired)],false);
     authCheck(A::user($expired) === null);
+    $state = str_repeat('a',64); $browser = str_repeat('b',64);
+    S::run('INSERT INTO oauth_flows VALUES (?,?,?,?)',[hash('sha256',$state),hash('sha256',$browser),'verifier',time()+60],false);
+    denied(fn () => app\service\OAuth::consume($state,str_repeat('c',64)));
+    authCheck(app\service\OAuth::consume($state,$browser) === 'verifier');
+    denied(fn () => app\service\OAuth::consume($state,$browser));
+    S::run('INSERT INTO oauth_flows VALUES (?,?,?,?)',[hash('sha256',$state),hash('sha256',$browser),'verifier',time()-1],false);
+    denied(fn () => app\service\OAuth::consume($state,$browser));
+    denied(fn () => app\service\OAuth::account(['id'=>'provider-1','email'=>'admin@example.com']));
+    denied(fn () => app\service\OAuth::account(['id'=>'provider-1','email'=>'unknown@example.com','email_verified'=>true]));
+    authCheck(app\service\OAuth::account(['id'=>'provider-1','email'=>'admin@example.com','email_verified_at'=>'2026-09-09T00:00:00Z']) === $id);
+    authCheck(app\service\OAuth::account(['id'=>'provider-1','email'=>'changed@example.com']) === $id);
+    denied(fn () => app\service\OAuth::account(['id'=>'provider-2','email'=>'admin@example.com','email_verified'=>true]));
     for ($i=0;$i<10;$i++) denied(fn () => A::login(['email'=>'none@example.com','password'=>'wrong'],'limited'));
     denied(fn () => A::login(['email'=>'admin@example.com','password'=>'test-password'],'limited'));
     echo "PASS: accounts, hashing, sessions, revocation, throttling, roles, last admin, Gravatar and coauthors.\n";

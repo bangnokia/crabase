@@ -23,7 +23,7 @@ final class AuthHttp
                 return json(['ok'=>true])->withHeaders($headers)->cookie(Auth::COOKIE,'',-1,'/','',false,true,'Strict');
             }
             $user = Auth::user($token);
-            return json(['user'=>$user])->withStatus($user ? 200 : 401)->withHeaders($headers);
+            return json(['user'=>$user,'oauth'=>OAuth::configured()])->withStatus($user ? 200 : 401)->withHeaders($headers);
         } catch (\InvalidArgumentException $error) {
             return json(['error'=>$error->getMessage()])->withStatus(400)->withHeaders($headers);
         }

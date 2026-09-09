@@ -51,9 +51,14 @@ final class Auth
         $valid = is_string($password) && strlen($password) <= 72 && password_verify($password, $account['password_hash'] ?? '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.');
         if (!$valid || !$account || !$account['enabled']) throw new InvalidArgumentException('Invalid email or password.');
         Store::run('DELETE FROM login_attempts WHERE key=?', [$key], false);
+        return self::session($account['user_id']);
+    }
+    public static function session(string $id): string
+    {
+        if (!Store::all('SELECT 1 FROM accounts WHERE user_id=? AND enabled=1',[$id])) throw new InvalidArgumentException('Account is disabled.');
         Store::run('DELETE FROM auth_sessions WHERE expires<?', [time()], false);
         $token = bin2hex(random_bytes(32));
-        Store::run('INSERT INTO auth_sessions VALUES (?,?,?)', [hash('sha256',$token), $account['user_id'], time()+604800], false);
+        Store::run('INSERT INTO auth_sessions VALUES (?,?,?)', [hash('sha256',$token), $id, time()+604800], false);
         return $token;
     }
     public static function logout(?string $token): void

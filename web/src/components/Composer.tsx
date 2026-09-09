@@ -4,15 +4,21 @@ import {
   Folder,
   GitBranch,
   Loader2,
+  Paperclip,
   Square,
   StickyNote,
 } from "lucide-react";
 import type { Chat, Project, Request, Snapshot } from "../types";
 import { IconButton, ErrorNotice } from "./ui";
+import { AttachmentList } from './AttachmentList';
+import { ModelPicker } from './ModelPicker';
+import { reasoningLevels } from '../lib/models';
+import { useAttachments } from '../hooks/useAttachments';
 export type SendOptions = {
   mode: "agent" | "note";
   model?: string;
   effort?: string | null;
+  attachments?: string[];
 };
 export function Composer({
   chat,
@@ -41,11 +47,14 @@ export function Composer({
   error: string;
   dismissError: () => void;
   request: Request;
-  send: (options: SendOptions) => Promise<void>;
+  send: (options: SendOptions) => Promise<boolean>;
   cancel: () => void;
   restore: () => void;
 }) {
   const textarea = useRef<HTMLTextAreaElement>(null);
+  const picker = useRef<HTMLInputElement>(null);
+  const attachments = useAttachments(request, draftVersion, chat?.id || project?.id || '');
+  const [dragging, setDragging] = useState(false);
   const [draft, setDraft] = useState(() => draftRef.current);
   useEffect(() => setDraft(draftRef.current), [draftRef, draftVersion]);
   const [model, setModel] = useState(
@@ -54,7 +63,7 @@ export function Composer({
   const [effort, setEffort] = useState(
     () => sessionStorage.getItem("crabase.effort") || "",
   );
-  const [branch, setBranch] = useState<string | null>(null);
+  const [context, setContext] = useState<{ branch: string | null; path: string; worktree: string | null; detached: boolean } | null>(null);
   const [branchError, setBranchError] = useState(false);
   const [contextVersion, setContextVersion] = useState(0);
   const [modelError, setModelError] = useState("");
@@ -62,11 +71,11 @@ export function Composer({
     data.models.find((item) => item.model === model) ||
     data.models.find((item) => item.isDefault) ||
     data.models[0];
-  const levels = chosen?.supportedReasoningEfforts || [];
+  const levels = reasoningLevels(chosen);
   const reasoning = levels.some((item) => item.reasoningEffort === effort)
     ? effort
-    : chosen?.defaultReasoningEffort || "";
-  const disabled = !draft.trim() || busy || !loaded || !live;
+    : levels.find(item => item.reasoningEffort === chosen?.defaultReasoningEffort)?.reasoningEffort || levels[0]?.reasoningEffort || "";
+  const disabled = (!draft.trim() && !attachments.files.length) || !attachments.ready || busy || !loaded || !live;
   useEffect(() => {
     if (chosen) sessionStorage.setItem("crabase.model", chosen.model);
     sessionStorage.setItem("crabase.effort", reasoning);
@@ -80,15 +89,17 @@ export function Composer({
     }
   }, [draft]);
   useEffect(() => {
-    setBranch(null);
+    setContext(null);
+  }, [project?.id, project?.path, live]);
+  useEffect(() => {
     setBranchError(false);
-    if (chat || !project || !live) return;
+    if (!project || !live) return;
     let stale = false;
-    request<{ branch: string | null }>("projectContext", {
+    request<NonNullable<typeof context>>("projectContext", {
       project_id: project.id,
     })
       .then((result) => {
-        if (!stale) setBranch(result.branch);
+        if (!stale) setContext(result);
       })
       .catch(() => {
         if (!stale) setBranchError(true);
@@ -96,14 +107,19 @@ export function Composer({
     return () => {
       stale = true;
     };
-  }, [chat?.id, project?.id, project?.path, live, request, contextVersion]);
+  }, [chat?.id, chat?.status, project?.id, project?.path, live, request, contextVersion]);
+  useEffect(() => {
+    const refresh = () => setContextVersion(version => version + 1);
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
+  }, []);
   function submit(mode: "agent" | "note") {
     if (disabled || (mode === "agent" && !chosen)) return;
     void send(
       mode === "note"
-        ? { mode }
-        : { mode, model: chosen.model, effort: reasoning || null },
-    ).then(() => textarea.current?.focus());
+        ? { mode, attachments: attachments.ids() }
+        : { mode, model: chosen.model, effort: reasoning || null, attachments: attachments.ids() },
+    ).then((sent) => { if (sent) attachments.clear(); textarea.current?.focus(); });
   }
   return (
     <div className={`composer-wrap ${chat ? "in-chat" : ""}`}>
@@ -119,17 +135,6 @@ export function Composer({
             <Folder size={15} />
             {project.name}
           </span>
-          {branch && (
-            <span>
-              <GitBranch size={15} />
-              {branch}
-            </span>
-          )}
-          {branchError && (
-            <button onClick={() => setContextVersion(contextVersion + 1)}>
-              Retry branch lookup
-            </button>
-          )}
         </div>
       )}
       {chat?.archived ? (
@@ -140,7 +145,13 @@ export function Composer({
           </button>
         </div>
       ) : (
-        <div className="composer-box">
+        <div className={`composer-box ${dragging ? 'attachment-dragging' : ''}`}
+          onDragOver={event => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); setDragging(true); } }}
+          onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragging(false); }}
+          onDrop={event => { event.preventDefault(); setDragging(false); if (!busy && live) attachments.add(Array.from(event.dataTransfer.files)); }}
+          onPaste={event => { if (event.clipboardData.files.length && !busy && live) { event.preventDefault(); attachments.add(Array.from(event.clipboardData.files)); } }}>
+          <AttachmentList files={attachments.files} remove={attachments.remove} retry={attachments.retry} disabled={busy || !live} />
+          <ErrorNotice message={attachments.error} />
           <textarea
             ref={textarea}
             aria-label={`Message ${data.agentName}`}
@@ -165,47 +176,22 @@ export function Composer({
           />
           <div className="composer-controls">
             <div className="model-controls">
-              <select
-                aria-label="Model"
-                value={chosen?.model || ""}
-                disabled={!data.models.length}
-                onChange={(event) => {
-                  setModel(event.target.value);
-                  setEffort("");
-                }}
-              >
-                {!data.models.length && (
-                  <option value="">
-                    {data.runtime === "error"
-                      ? "Models unavailable"
-                      : "Loading models…"}
-                  </option>
-                )}
-                {data.models.map((item) => (
-                  <option key={item.model} value={item.model}>
-                    {item.displayName}
-                  </option>
-                ))}
-              </select>
-              <select
-                aria-label="Reasoning level"
-                value={reasoning}
-                disabled={!levels.length}
-                onChange={(event) => setEffort(event.target.value)}
-              >
-                {!levels.length && (
-                  <option value="">No reasoning levels</option>
-                )}
-                {levels.map((item) => (
-                  <option
-                    key={item.reasoningEffort}
-                    value={item.reasoningEffort}
-                  >
-                    {item.reasoningEffort[0].toUpperCase() +
-                      item.reasoningEffort.slice(1)}
-                  </option>
-                ))}
-              </select>
+              <input ref={picker} type="file" multiple hidden onChange={event => { attachments.add(Array.from(event.target.files || [])); event.target.value = ''; }} />
+              <IconButton label="Attach files" disabled={busy || !live || attachments.files.length >= 10} onClick={() => picker.current?.click()}><Paperclip size={17} /></IconButton>
+              <ModelPicker models={data.models} chosen={chosen} reasoning={reasoning}
+                unavailable={data.runtime === 'error'}
+                selectModel={model => { setModel(model); setEffort(''); }}
+                selectReasoning={setEffort} />
+              {context?.branch && (
+                <span className="composer-branch" tabIndex={0}
+                  title={`${context.detached ? 'Detached HEAD: ' : 'Branch: '}${context.branch}\n${context.worktree ? `Worktree: ${context.worktree}\n` : ''}${context.path}`}
+                  onMouseEnter={() => setContextVersion(version => version + 1)}
+                  onFocus={() => setContextVersion(version => version + 1)}>
+                  <GitBranch size={14} aria-hidden="true" />
+                  <span className="truncate">{context.detached ? 'HEAD · ' : ''}{context.branch}</span>
+                </span>
+              )}
+              {project && branchError && <button className="text-button" onClick={() => setContextVersion(version => version + 1)}>Retry branch lookup</button>}
               {data.runtime === "error" && (
                 <button
                   className="text-button"

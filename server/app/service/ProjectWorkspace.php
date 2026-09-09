@@ -9,6 +9,25 @@ final class ProjectWorkspace
     private const MAX_FILE_SIZE = 1000000;
     private const MAX_PREVIEW_SIZE = 5000000;
 
+    public static function context(array $data): array
+    {
+        $path = self::root($data);
+        [$git, $branch] = self::gitInfo($path);
+        $result = ['branch'=>$branch, 'path'=>$path, 'worktree'=>null, 'detached'=>false];
+        if (!$git) return $result;
+        if ($branch === null) {
+            [$status, $commit] = self::command($path, ['rev-parse','--short','HEAD']);
+            if ($status !== 0) throw new \RuntimeException('Could not read Git HEAD.');
+            $result['branch'] = trim($commit);
+            $result['detached'] = true;
+        }
+        [$status, $directories] = self::command($path, ['rev-parse','--path-format=absolute','--git-dir','--git-common-dir','--show-toplevel']);
+        $directories = explode("\n", trim($directories));
+        if ($status !== 0 || count($directories) !== 3) throw new \RuntimeException('Could not read worktree context.');
+        if ($directories[0] !== $directories[1]) $result['worktree'] = basename($directories[2]);
+        return $result;
+    }
+
     public static function snapshot(array $data): array
     {
         $root = self::root($data);

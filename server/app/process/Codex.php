@@ -46,6 +46,8 @@ final class Codex
             }
         }
         $this->status('ready');
+        \app\service\Attachments::cleanup();
+        Timer::add(3600, fn () => \app\service\Attachments::cleanup());
         Store::run("INSERT INTO settings VALUES ('models','[]') ON CONFLICT(key) DO UPDATE SET value='[]'");
         // One persistent app-server, with independent turns for different chats.
         Timer::add(0.05, function () {
@@ -392,7 +394,7 @@ final class Codex
                     return;
                 }
                 $job = $this->jobs[$jobId];
-                $turnParams = ['threadId' => $thread,'input' => [['type' => 'text','text' => \app\service\ParticipantContext::input($job)]]];
+                $turnParams = ['threadId' => $thread,'input' => array_merge([['type' => 'text','text' => \app\service\ParticipantContext::input($job)]], \app\service\Attachments::input($job))];
                 if ($job['model'] !== null) {
                     $turnParams['model'] = $job['model'];
                 }
