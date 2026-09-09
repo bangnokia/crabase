@@ -130,9 +130,15 @@ final class Codex
                 $result = $this->terminalAction($connection, $m['action'], $m['data']);
             } else {
                 $m['data']['user_id'] = $actor['id'];
+                if ($m['action'] === 'projectDelete') {
+                    $chatIds = Chat::query()->where('project_id', Store::text($m['data']['project_id'] ?? null, 64))->pluck('id')->all();
+                    foreach ($this->terminals as $terminal) {
+                        if ($terminal['running'] && in_array($terminal['chat_id'], $chatIds, true)) throw new \InvalidArgumentException('Close this workspace’s terminals before deleting it.');
+                    }
+                }
                 $result = match ($m['action']) {
                     'profile' => ['user'=>$actor],
-                    'project', 'projectFolders', 'projectArchive', 'projectDelete' => $actor['admin']
+                    'project', 'projectFolders', 'projectArchive', 'projectDelete', 'worktreeCreate' => $actor['admin']
                         ? \app\service\Actions::handle($m['action'], $m['data'])
                         : throw new \InvalidArgumentException('Administrator access required to manage projects.'),
                     'profileSave' => Auth::update($actor, $m['data'], false),
@@ -368,6 +374,8 @@ final class Codex
         Store::notify(Job::query()->whereKey($jobId)->update(['status'=>'running']));
         Store::notify(Chat::query()->whereKey($next['chat_id'])->update(['status'=>'running']));
         try {
+            $project = Chat::query()->find($next['chat_id'])?->project;
+            if ($project?->parent_id) $next['path'] = $project->workspacePath();
             if (!$next['path']) {
                 $next['path'] = dirname(__DIR__, 2).'/runtime/chats/'.$next['chat_id'];
                 if (!is_dir($next['path']) && !mkdir($next['path'], 0700, true)) {
@@ -615,7 +623,7 @@ final class Codex
             if (!$row) {
                 throw new \InvalidArgumentException('Conversation not found.');
             }
-            $path = $row->project?->path;
+            $path = $row->project?->workspacePath();
             $cwd = $path ?: dirname(__DIR__, 2).'/runtime/chats/'.$chatId;
             if (!$path && !is_dir($cwd) && !mkdir($cwd, 0700, true)) {
                 throw new \RuntimeException('Could not create the chat directory.');

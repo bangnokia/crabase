@@ -1,8 +1,9 @@
-import { useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   Archive,
   Folder,
   FolderOpen,
+  GitBranch,
   Loader2,
   MoreHorizontal,
   PanelLeft,
@@ -25,6 +26,7 @@ type Props = {
   admin: boolean;
   chats: Chat[];
   selected: string;
+  activeProjectId?: string;
   name: string;
   avatars: Avatars;
   visible: boolean;
@@ -35,6 +37,7 @@ type Props = {
   showDialog: (dialog: "search" | "project" | "settings") => void;
   archive: (chat: Chat) => void;
   manageProject: (project: Project, action: "projectArchive" | "projectDelete") => void;
+  createWorktree: (project: Project) => void;
 };
 function ChatLink({
   chat,
@@ -113,6 +116,7 @@ export function Sidebar({
   chats,
   selected,
   name,
+  activeProjectId,
   avatars,
   visible,
   hidden,
@@ -122,6 +126,7 @@ export function Sidebar({
   showDialog,
   archive,
   manageProject,
+  createWorktree,
 }: Props) {
   const [showArchived, setShowArchived] = useState(false);
   const [width, setWidth] = useState(232);
@@ -129,16 +134,22 @@ export function Sidebar({
   const [projectSort, setProjectSort] = useState<ProjectSort>("created");
   const dragOffset = useRef(0);
   const { collapsed, projectsOpen, toggleProjects, toggleProject } = useProjectExpansion();
-  const visibleProjects = sortProjects(projects.filter((project) => showArchived || !project.archived), chats, projectSort);
+  const activeParent = projects.find((project) => project.id === activeProjectId)?.parent_id;
+  useEffect(() => {
+    if (!activeParent || !activeProjectId) return;
+    if (!projectsOpen) toggleProjects();
+    for (const id of [activeParent, activeProjectId]) if (collapsed.includes(id)) toggleProject(id);
+  }, [activeProjectId, activeParent]);
+  const visibleProjects = sortProjects(projects.filter((project) => showArchived || !project.archived), chats, projectSort).filter((project) => !project.parent_id);
   const pinnedProjects = visibleProjects.filter((project) => pins.includes(project.id));
-  const renderProjects = (items: Project[]) => items.map((project) => {
+  const renderProjects = (items: Project[]): ReactNode => items.map((project) => {
     const expanded = !collapsed.includes(project.id);
     const projectChats = chats.filter(
       (chat) => chat.project_id === project.id && !chat.archived,
     );
     return (
       <section
-        className="project-group"
+        className={`project-group ${project.parent_id ? 'worktree-group' : ''}`}
         key={project.id}
         aria-label={project.name}
       >
@@ -149,22 +160,23 @@ export function Sidebar({
             aria-controls={`project-${project.id}`}
             onClick={() => toggleProject(project.id)}
           >
-            {expanded ? (
+            {project.parent_id ? <GitBranch size={16} /> : expanded ? (
               <FolderOpen size={16} />
             ) : (
               <Folder size={16} />
             )}
-            <span className="truncate" title={project.name}>{project.name}{project.archived ? " · Archived" : ""}</span>
+            <span className="truncate" title={project.parent_id ? `${project.name}\n${project.path}` : project.name}>{project.name}{project.archived ? " · Archived" : ""}</span>
           </button>
-          <Menu viewport label={`Project options for ${project.name}`} icon={<MoreHorizontal size={14} />}>
-            <MenuItem onClick={() => pinProject(project)}>
+          {(!project.parent_id || admin) && <Menu viewport label={`Project options for ${project.name}`} icon={<MoreHorizontal size={14} />}>
+            {!project.parent_id && <MenuItem onClick={() => pinProject(project)}>
               {pins.includes(project.id) ? "Unpin" : "Pin"}
-            </MenuItem>
+            </MenuItem>}
+            {admin && !project.parent_id && !project.archived && <MenuItem onClick={() => createWorktree(project)}>Create worktree</MenuItem>}
             {admin && <><MenuItem onClick={() => manageProject(project, "projectArchive")}>
               {project.archived ? "Restore" : "Archive"}
             </MenuItem>
             <MenuItem onClick={() => manageProject(project, "projectDelete")}>Delete</MenuItem></>}
-          </Menu>
+          </Menu>}
           <IconButton
             label={`New chat in ${project.name}`}
             onClick={() => newChat(project.id)}
@@ -196,6 +208,7 @@ export function Sidebar({
                   Load more ({projectChats.length - 5})
                 </button>
               )}
+            {!project.parent_id && renderProjects(sortProjects(projects.filter((child) => child.parent_id === project.id && (showArchived || !child.archived)), chats, 'updated'))}
           </div>
         )}
       </section>

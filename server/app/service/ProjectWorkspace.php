@@ -122,7 +122,7 @@ final class ProjectWorkspace
         $id = Store::text($data['project_id'] ?? null, 64);
         $project = Project::query()->find($id);
         if (!$project) throw new InvalidArgumentException('Project not found.');
-        return WorkspaceFolders::resolve($project['path']);
+        return $project->workspacePath();
     }
 
     private static function relative(mixed $value): string
@@ -207,13 +207,30 @@ final class ProjectWorkspace
         return $changes;
     }
 
-    private static function command(string $root, array $args): array
+    public static function command(string $root, array $args): array
     {
         $process = proc_open(array_merge(['git','-C',$root], $args), [0=>['file','/dev/null','r'],1=>['pipe','w'],2=>['pipe','w']], $pipes);
         if (!is_resource($process)) throw new \RuntimeException('Could not start Git.');
-        $output = stream_get_contents($pipes[1]);
-        $error = stream_get_contents($pipes[2]);
+        stream_set_blocking($pipes[1], false);
+        stream_set_blocking($pipes[2], false);
+        $output = $error = '';
+        $deadline = microtime(true) + 10;
+        do {
+            $output .= stream_get_contents($pipes[1]);
+            $error .= stream_get_contents($pipes[2]);
+            $state = proc_get_status($process);
+            if (!$state['running']) break;
+            if (microtime(true) >= $deadline) {
+                proc_terminate($process, 9);
+                fclose($pipes[1]); fclose($pipes[2]); proc_close($process);
+                throw new \RuntimeException('Git operation timed out. Check the repository before retrying.');
+            }
+            usleep(1000);
+        } while (true);
+        $output .= stream_get_contents($pipes[1]);
+        $error .= stream_get_contents($pipes[2]);
         fclose($pipes[1]); fclose($pipes[2]);
-        return [proc_close($process), $output === false ? '' : $output, $error === false ? '' : $error];
+        $status = proc_close($process);
+        return [$state['exitcode'] >= 0 ? $state['exitcode'] : $status, $output, $error];
     }
 }

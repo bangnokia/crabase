@@ -17,6 +17,13 @@ test("projects sort by latest chat, name, or creation order", () => {
   assert.deepEqual(sortProjects(projects, chats, "created").map((p) => p.id), ["a", "b"]);
 });
 
+test("worktree activity updates its parent project and worktrees sort by their own chats", () => {
+  const all = [...projects, {id:'w1',parent_id:'a',name:'feature/login',created_order:3}, {id:'w2',parent_id:'a',name:'feature/billing',created_order:4}];
+  const activity = [...chats, {project_id:'w1',updated_at:'2026-09-10T01:00:00Z'}, {project_id:'w2',updated_at:'2026-09-09T03:00:00Z'}];
+  assert.deepEqual(sortProjects(all, activity, 'updated').filter(p=>!p.parent_id).map(p=>p.id), ['a','b']);
+  assert.deepEqual(sortProjects(all.filter(p=>p.parent_id), activity, 'updated').map(p=>p.id), ['w1','w2']);
+});
+
 test("project menus stay inside narrow viewports and flip above near the bottom", async () => {
   const { menuPosition } = await import("../src/lib/layout.ts");
   assert.deepEqual(menuPosition({ left: 140, right: 164, top: 40, bottom: 64 }, { width: 184, height: 100 }, { width: 390, height: 800 }), { left: 8, top: 68 });

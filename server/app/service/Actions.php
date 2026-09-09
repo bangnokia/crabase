@@ -52,6 +52,7 @@ final class Actions
             'projectSave' => ProjectWorkspace::save($data),
             'projectPin' => self::pinProject($data),
             'project' => self::createProject($data),
+            'worktreeCreate' => Worktrees::create($data),
             'projectArchive', 'projectDelete' => self::manageProject($action, $data),
             'create' => self::createChat($data),
             'message' => self::sendMessage($data),
@@ -102,19 +103,23 @@ final class Actions
         if ($action === 'projectArchive' && !is_bool($data['archived'] ?? null)) {
             throw new InvalidArgumentException('Archived must be a boolean.');
         }
-        \support\Db::transaction(function () use ($action, $data, $id) {
-            $project = Project::query()->find($id) ?? throw new InvalidArgumentException('Project not found.');
-            if ($action === 'projectArchive') {
-                $project->update(['archived' => (int)$data['archived']]);
-                return;
-            }
-            $chats = Chat::query()->where('project_id', $id);
-            $ids = $chats->pluck('id');
-            if ((clone $chats)->where('status', '!=', 'idle')->exists() ||
-                Job::query()->whereIn('chat_id', $ids)->whereIn('status', ['queued', 'running'])->exists()) {
-                throw new InvalidArgumentException('Stop active work in this project before deleting it.');
-            }
-            // Database records only: never remove project folders, worktrees, or files.
+        $force = $data['force'] ?? false;
+        if (!is_bool($force)) throw new InvalidArgumentException('Force must be a boolean.');
+        $project = Project::query()->find($id) ?? throw new InvalidArgumentException('Project not found.');
+        if ($action === 'projectArchive') {
+            $project->update(['archived' => (int)$data['archived']]);
+            return ['ok' => true];
+        }
+        if (Project::query()->where('parent_id', $id)->exists()) throw new InvalidArgumentException('Delete this project’s worktrees first.');
+        $chats = Chat::query()->where('project_id', $id);
+        $ids = $chats->pluck('id');
+        if ((clone $chats)->where('status', '!=', 'idle')->exists() ||
+            Job::query()->whereIn('chat_id', $ids)->whereIn('status', ['queued', 'running'])->exists()) {
+            throw new InvalidArgumentException('Stop active work in this project before deleting it.');
+        }
+        // Finish Git removal before opening a short database transaction. Never delete the original project folder.
+        if ($project->parent_id && !Worktrees::remove($project, $force)) return ['requires_confirmation' => true];
+        \support\Db::transaction(function () use ($project, $chats, $ids) {
             foreach ([Approval::class, Job::class, Message::class, Event::class] as $model) {
                 $model::query()->whereIn('chat_id', $ids)->delete();
             }

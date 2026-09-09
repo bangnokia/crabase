@@ -4,6 +4,7 @@ export type Project = {
   path: string;
   created_order: number;
   archived: number;
+  parent_id?: string | null;
 };
 export type Chat = {
   id: string;

@@ -101,6 +101,7 @@ Use 6–8px radii for rows and controls, 16–20px for the composer and dialogs,
 - Persist the Projects section and individual project expansion states in browser localStorage.
 - Clicking a project label toggles that project’s chats. Use closed/open folder icons to communicate state; no additional right-side chevron.
 - The adjacent plus button starts a new chat for that project.
+- Original-folder chats stay directly under their project. Worktrees appear below them as shallow, collapsible branch-icon groups, each reusing the same chat rows, plus action and five-chat Load more behavior. Sort worktree groups by latest chat activity independently of the project's direct chats; include child activity when sorting top-level projects. Offer worktree creation in the original project's menu, without adding an extra workspace dashboard.
 - Chat rows use the full available width. Selected rows get one quiet background treatment.
 - Show participant avatar stacks for both project and standalone chats. Do not use generic people or message icons as substitutes.
 - Keep running state recognizable without replacing participant identity or making the row jump.

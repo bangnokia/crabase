@@ -433,6 +433,7 @@ small {
   gap: 2px;
   padding-bottom: var(--space-2);
 }
+.worktree-group { margin-left: var(--space-2); min-width: 0; }
 .chat-row {
   position: relative;
   min-width: 0;

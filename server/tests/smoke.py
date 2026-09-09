@@ -79,6 +79,7 @@ if __name__=='__main__':
     first,second=Client(cookie=cookies[0]),Client(cookie=cookies[1])
     second.call('usersList',error=True)
     second.call('projectFolders',error=True)
+    second.call('worktreeCreate',{'project_id':'invalid','branch':'feature/test'},error=True)
     second.call('project',{'path':'/'},error=True)
     # Disposable project: verify management permissions and deletion pushes to an open subscriber.
     with tempfile.TemporaryDirectory(prefix='crabase-delete-') as temp:

@@ -51,7 +51,7 @@ The integration uses authorization code + S256 PKCE, browser-bound one-use state
 
 ## VPS setup
 
-Crabase requires login through email/password or configured TDA Passport OAuth2, but project authorization and OS/worktree isolation are not implemented. All enabled users are trusted collaborators with access to the shared workspace and its terminal. Keep both listeners on loopback and connect through an SSH tunnel. Do not expose ports 8787 or 8788 through a public firewall, reverse proxy, or container port mapping.
+Crabase requires login through email/password or configured TDA Passport OAuth2, but project authorization and OS isolation are not implemented. Worktrees separate feature files, not user permissions. All enabled users are trusted collaborators with access to the shared workspace and its terminal. Keep both listeners on loopback and connect through an SSH tunnel. Do not expose ports 8787 or 8788 through a public firewall, reverse proxy, or container port mapping.
 
 ### 1. Install prerequisites
 
@@ -214,7 +214,7 @@ Existing installations may retain the three getting-started conversations; fresh
 
 This is a **local foundation**, not a production team deployment. Both PHP listeners bind to loopback and WebSocket origins are restricted to the local preview. Email/password sessions protect workspace commands and artifact downloads. All signed-in users share one workspace, filesystem and terminal privileges; add project membership/authorization, isolation, TLS and a reviewed deployment configuration before public exposure.
 
-One Codex turn runs at a time across this instance to avoid concurrent agent edits. All chats in a project currently use its existing working directory; separate Git worktrees and isolated workers are not implemented yet. Direct edits by someone on the machine can still conflict with an agent's edits. Codex runs with `danger-full-access` and `never` approvals using the local account's credentials. Unsupported interactive server requests receive an explicit error; forms and other advanced desktop integrations are not implemented.
+Chats can run concurrently, so chats sharing a working folder can still make conflicting edits. Use separate worktrees for independent features. Direct edits by someone on the machine can still conflict with an agent's edits. Codex runs with `danger-full-access` and `never` approvals using the local account's credentials. Unsupported interactive server requests receive an explicit error; forms and other advanced desktop integrations are not implemented.
 
 Conversation display data lives in `server/runtime/crabase.sqlite`; agent context lives in Codex's own thread storage. Back up both to preserve the full workspace. App archiving hides the chat locally and does not archive the upstream Codex thread. Interrupted server runs are marked failed on restart and can be resumed by sending another message.
 
@@ -307,4 +307,12 @@ Users persist in SQLite with stable IDs, names, avatar URLs, and creation timest
 
 ### Parallel agent chats
 
-The backend runs one persistent `codex app-server` subprocess and communicates through JSON-RPC over stdin/stdout. Different chats can run concurrently; messages in the same chat remain sequential. The default is 12 active chats, configurable with `CRABASE_PARALLEL_CHATS=12` in `.env`. Restart the backend after changing it. Cancelling one chat does not cancel other chats. Chats in the same project still share its files; Git worktree isolation is not implemented.
+The backend runs one persistent `codex app-server` subprocess and communicates through JSON-RPC over stdin/stdout. Different chats can run concurrently; messages in the same chat remain sequential. The default is 12 active chats, configurable with `CRABASE_PARALLEL_CHATS=12` in `.env`. Restart the backend after changing it. Cancelling one chat does not cancel other chats. Chats in the same working folder share its files.
+
+### Feature worktrees
+
+Administrators can choose **Create worktree** from an active project's menu and enter a new branch name (for example `feature/login`). The project must be a Git repository root with a commit. The new branch starts at its current `HEAD`; uncommitted changes, ignored `.env`, dependencies and SQLite files are not copied. Install dependencies and configure test data separately in the worktree terminal. Preview-server automation is not included.
+
+New worktrees are stored at `<CRABASE_WORKSPACE_ROOT>/.worktrees/<safe-project-name>/<random-word-pair>/`, for example `.worktrees/daudau.cc/wobbly-otter/`, outside the original project. Folder names are reserved atomically; existing folders are never overwritten. The random folder name is independent of the Git branch shown in the UI. Existing ID-based paths remain supported and are not moved automatically. Worktrees appear as branch-icon groups beneath the project's direct chats. Each group can contain many chats and shows five recent chats plus Load more. Worktree groups sort by latest chat activity; their activity also counts toward the original project's Latest update sort. Each worktree has a separate record linked to its parent, so the editor, Git changes, agent and terminal automatically use its folder.
+
+Creation uses a bounded local Git checkout (10-second command timeout); very large repositories may need manual provisioning. A failure after Git creation preserves the folder/branch for recovery. Archiving hides records without deleting files. Deleting a worktree removes its local folder using `git worktree remove` and then its chats/record. Close its terminals and stop active jobs first. Uncommitted/untracked files trigger an extra **Delete anyway?** confirmation; cancelling leaves the folder and chats untouched, while confirming permanently discards those files. Locked worktrees are not forcibly removed. **Ignored local files such as `.env`, SQLite databases and dependencies are deleted too**; back up needed data before confirming. The Git branch is retained, so committed files remain recoverable. Delete child worktrees before deleting their original project record; the original project folder is never removed. Back up `.worktrees` along with the original repositories—the worktrees depend on their shared Git metadata. Git worktrees are not a security boundary.

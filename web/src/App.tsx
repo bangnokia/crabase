@@ -1,5 +1,6 @@
 import type { Project } from "./types";
 import { ProjectDialog } from "./components/ProjectDialog";
+import { WorktreeDialog } from "./components/WorktreeDialog";
 import { useAuth } from "./components/AuthGate";
 import { useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
@@ -30,6 +31,8 @@ export function App() {
     workspace;
   const preferences = usePreferences(data.users);
   const [projectId, setProjectId] = useState("");
+  const [worktreeProject, setWorktreeProject] = useState<Project | null>(null);
+  const previousProjects = useRef(data.projects);
   const [draftVersion, setDraftVersion] = useState(0);
   const [busy, setBusy] = useState(false);
   const sending = useRef(false);
@@ -174,14 +177,24 @@ export function App() {
   }
   async function manageProject(target: Project, action: "projectArchive" | "projectDelete") {
     if (action === "projectDelete" && !window.confirm(
-      `Delete "${target.name}" and all its chats? This permanently removes their database records. Local folders and files will be kept.`,
+      target.parent_id
+        ? `Delete worktree "${target.name}" and all its chats? The local folder will be permanently removed, including ignored files such as .env, databases and dependencies. The Git branch will be kept.`
+        : `Delete "${target.name}" and all its chats? Delete its worktrees first. The original project folder will be kept.`,
     )) return;
-    if (await act(action, { project_id: target.id, archived: !target.archived })) {
+    setError('');
+    try {
+      const result = await request<{ requires_confirmation?: boolean }>(action, { project_id: target.id, archived: !target.archived });
+      if (result.requires_confirmation) {
+        if (!window.confirm(`Worktree "${target.name}" has uncommitted or untracked files. Delete anyway? Everything in ${target.path} will be permanently removed. Uncommitted work cannot be recovered from Git. The branch will be kept.`)) return;
+        await request(action, { project_id: target.id, force: true });
+      }
       setToast(action === "projectDelete" ? "Project deleted" : target.archived ? "Project restored" : "Project archived");
-    }
+    } catch (error) { setError((error as Error).message); }
   }
   useEffect(() => {
-    if (loaded && projectId && !data.projects.some((item) => item.id === projectId)) setProjectId("");
+    // A create response can arrive before its snapshot patch. Only clear a project that was actually removed.
+    if (loaded && projectId && previousProjects.current.some((item) => item.id === projectId) && !data.projects.some((item) => item.id === projectId)) setProjectId("");
+    previousProjects.current = data.projects;
     if (loaded && selected && !data.chats.some((item) => item.id === selected)) newChat();
   }, [loaded, data.projects, data.chats, selected, projectId]);
   const composer = (
@@ -219,6 +232,7 @@ export function App() {
         pinProject={(target) => void act("projectPin", { project_id: target.id, pinned: !data.pins.includes(target.id) })}
         chats={data.chats}
         selected={selected}
+        activeProjectId={project?.id}
         name={preferences.name}
         avatars={preferences.avatars}
         visible={sidebar}
@@ -235,6 +249,7 @@ export function App() {
         }}
         archive={(target) => void archive(target)}
         manageProject={(target, action) => void manageProject(target, action)}
+        createWorktree={setWorktreeProject}
       />
       <main className="main-panel" id="main-content" tabIndex={-1}>
         <Header
@@ -334,6 +349,8 @@ export function App() {
           close={() => setDialog("")}
         />
       )}
+      {worktreeProject && !!user.admin && <WorktreeDialog project={worktreeProject} request={request}
+        close={() => setWorktreeProject(null)} added={(id) => { setWorktreeProject(null); newChat(id); setToast('Worktree created'); }} />}
     </div>
   );
 }

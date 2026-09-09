@@ -10,7 +10,27 @@ final class Project extends Model
     public $timestamps = false;
     public $incrementing = false;
     protected $keyType = 'string';
-    protected $fillable = ['id', 'name', 'path', 'archived'];
+    protected $fillable = ['id', 'name', 'path', 'archived', 'parent_id'];
+
+    public function workspacePath(): string
+    {
+        if (!$this->parent_id) return \app\service\WorkspaceFolders::resolve($this->path);
+        $base = \app\service\WorkspaceFolders::root().'/.worktrees';
+        $expected = $this->path;
+        $parent = self::query()->find($this->parent_id);
+        $directory = $parent ? $base.'/'.\app\service\Worktrees::projectFolder($parent->name) : '';
+        $legacy = $base.'/'.$this->parent_id.'/'.$this->id;
+        if ($expected !== $legacy && (!$parent || dirname($expected) !== $directory || !preg_match('/^[a-z]+-[a-z]+$/D', basename($expected)))) {
+            throw new \InvalidArgumentException('Invalid worktree folder.');
+        }
+        foreach ([dirname(dirname($expected)), dirname($expected), $expected] as $path) {
+            if (is_link($path)) throw new \InvalidArgumentException('Worktree folder cannot be a symlink.');
+        }
+        if ($this->path !== $expected || realpath($expected) !== $expected || !is_dir($expected) || !is_readable($expected)) {
+            throw new \InvalidArgumentException('Worktree folder is unavailable.');
+        }
+        return $expected;
+    }
 
     public function chats(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
