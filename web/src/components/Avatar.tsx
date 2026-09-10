@@ -34,15 +34,15 @@ export function AvatarStack({
   if (!users.length) return null;
   return (
     <span className="avatar-stack" title={users.join(", ")}>
-      {users.slice(0, 3).map((user) => (
+      {users.slice(0, 5).map((user) => (
         <Avatar key={user} user={user} avatars={avatars} size="small" />
       ))}
-      {users.length > 3 && (
+      {users.length > 5 && (
         <span
           className="avatar-overflow"
-          aria-label={`${users.length - 3} more participants`}
+          aria-label={`${users.length - 5} more participants`}
         >
-          +{users.length - 3}
+          +{users.length - 5}
         </span>
       )}
     </span>

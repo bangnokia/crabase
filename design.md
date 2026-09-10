@@ -113,7 +113,7 @@ Use 6–8px radii for rows and controls, 16–20px for the composer and dialogs,
 - Stacks show only known human participants. Until explicit membership exists, define participation as having authored a message or note in that chat. Exclude guide and agent messages.
 - Do not insert default users into empty chats or infer that both dummy users participate everywhere.
 - Use 20px avatars in stacks with approximately 5px overlap; use 28–32px avatars in messages and the profile.
-- For crowded stacks, show up to three avatars plus a readable overflow count. Expose participant names accessibly.
+- For crowded stacks, show up to five avatars plus a readable overflow count. Expose participant names accessibly.
 - Dummy photo URLs are preview fixtures, not real user identities. If an image fails, show that user’s initials. Do not display a broken image or an invented portrait for an unknown author.
 
 ### Composer
