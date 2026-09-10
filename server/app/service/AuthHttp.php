@@ -6,7 +6,7 @@ final class AuthHttp
     public static function handle(\support\Request $request, string $action): \support\Response
     {
         $headers = ['Cache-Control'=>'no-store','X-Content-Type-Options'=>'nosniff'];
-        if (!in_array(explode(':',$request->host())[0], ['localhost','127.0.0.1'],true) || $request->header('sec-fetch-site') === 'cross-site' ||
+        if (!Auth::allowedHost(explode(':',$request->host())[0]) || $request->header('sec-fetch-site') === 'cross-site' ||
             ($request->method() !== 'GET' && !Auth::allowedOrigin($request->header('origin')))) return json(['error'=>'Forbidden'])->withStatus(403)->withHeaders($headers);
         try {
             $token = $request->cookie(Auth::COOKIE);

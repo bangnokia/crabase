@@ -5,6 +5,7 @@ import { ErrorNotice } from "../components/ui";
 import { useAuth } from "../components/AuthGate";
 import { useAttachments } from '../hooks/useAttachments';
 import { AttachmentList } from '../components/AttachmentList';
+import { HealthPage } from './HealthPage';
 
 export function SettingsPage({ theme, setTheme, request, back }: {
   theme: string; setTheme: (theme: string) => void; request: Request; back: () => void;
@@ -18,7 +19,8 @@ export function SettingsPage({ theme, setTheme, request, back }: {
         <button aria-current={page === 'profile' ? 'page' : undefined} onClick={() => setPage('profile')}>Profile</button>
         <button disabled={user.avatar_required} aria-current={page === 'appearance' ? 'page' : undefined} onClick={() => setPage('appearance')}>Appearance</button>
         {!!user.admin && !user.avatar_required && <><span className="settings-group">Admin</span>
-          <button aria-current={page === 'users' ? 'page' : undefined} onClick={() => setPage('users')}>Users</button></>}
+          <button aria-current={page === 'users' ? 'page' : undefined} onClick={() => setPage('users')}>Users</button>
+          <button aria-current={page === 'health' ? 'page' : undefined} onClick={() => setPage('health')}>Health</button></>}
         <button className="settings-logout" onClick={() => void logout().catch(error => setError(error.message))}>Sign out</button>
       </nav>
       <section className="settings-content">
@@ -33,6 +35,7 @@ export function SettingsPage({ theme, setTheme, request, back }: {
           </button>)}
         </div></>}
         {page === 'users' && !!user.admin && !user.avatar_required && <UserManagement request={request} />}
+        {page === 'health' && !!user.admin && !user.avatar_required && <HealthPage request={request} />}
       </section>
     </div>
   </div>;

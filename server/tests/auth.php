@@ -9,6 +9,14 @@ function denied(callable $action): void {
     throw new RuntimeException('Expected rejection.');
 }
 try {
+    putenv('CRABASE_ALLOWED_HOSTS=192.168.1.0/24,100.64.0.0/10');
+    foreach (['localhost', '127.0.0.1', '192.168.1.152', '100.64.0.1', '100.127.255.254'] as $host) {
+        authCheck(A::allowedHost($host) && A::allowedOrigin('http://'.$host.':8787'));
+    }
+    foreach (['evil.example', '192.168.2.1', '100.63.255.255', '100.128.0.0', '8.8.8.8'] as $host) {
+        authCheck(!A::allowedHost($host) && !A::allowedOrigin('http://'.$host.':8787'));
+    }
+    foreach ([null, 'null', 'http://localhost:8787/path', 'http://localhost:9999', 'http://localhost.evil:8787', 'http://evil@localhost:8787'] as $origin) authCheck(!A::allowedOrigin($origin));
     $process = proc_open([PHP_BINARY, dirname(__DIR__).'/vendor/bin/phinx','migrate','-c',dirname(__DIR__).'/phinx.php'], [0=>['file','/dev/null','r'],1=>['file','/dev/null','w'],2=>STDERR], $pipes);
     authCheck(proc_close($process) === 0);
     $id = A::create(['name'=>'Admin','email'=>'admin@example.com','password'=>'test-password'],true)['id'];
@@ -16,6 +24,7 @@ try {
     denied(fn () => A::login(['email'=>'admin@example.com','password'=>'wrong'], 'test'));
     $token = A::login(['email'=>'ADMIN@example.com','password'=>'test-password'], 'test');
     $admin = A::user($token);
+    authCheck($admin['avatar_required'] === false);
     authCheck($admin['id'] === $id && !isset($admin['password_hash']));
     authCheck(A::user('bad') === null && A::user(str_repeat('0',64)) === null);
     authCheck(str_starts_with(S::snapshot()['users'][0]['avatar_url'], 'https://www.gravatar.com/avatar/'));

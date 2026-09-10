@@ -16,7 +16,7 @@ final class Auth
         $user = AuthSession::query()->from('auth_sessions as s')->join('accounts as a', 'a.user_id', '=', 's.user_id')->join('users as u', 'u.id', '=', 'a.user_id')
             ->where('s.token_hash', hash('sha256', $token))->where('s.expires', '>', time())->where('a.enabled', 1)->selectRaw(self::FIELDS)->first()?->toArray();
         if ($user) {
-            $user['avatar_required'] = $user['avatar_url'] === '';
+            $user['avatar_required'] = false;
             $user['avatar_fallback'] = self::avatar($user['email']);
         }
         return $user;
@@ -27,7 +27,20 @@ final class Auth
     }
     public static function allowedOrigin(?string $origin): bool
     {
-        return in_array($origin, ['http://localhost:5173','http://127.0.0.1:5173','http://localhost:8787','http://127.0.0.1:8787'], true);
+        if (!is_string($origin) || !preg_match('~^http://([^/:]+):(5173|8787)$~D', $origin, $match)) return false;
+        return self::allowedHost($match[1]);
+    }
+    public static function allowedHost(string $host): bool
+    {
+        if (in_array($host, ['localhost', '127.0.0.1'], true)) return true;
+        if (!filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) return false;
+        foreach (explode(',', getenv('CRABASE_ALLOWED_HOSTS') ?: '') as $network) {
+            [$address, $prefix] = array_pad(explode('/', trim($network), 2), 2, '32');
+            if (!filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) || !ctype_digit($prefix) || (int)$prefix > 32) continue;
+            $mask = (int)$prefix === 0 ? 0 : (-1 << (32 - (int)$prefix));
+            if ((ip2long($host) & $mask) === (ip2long($address) & $mask)) return true;
+        }
+        return false;
     }
     private static function email(mixed $value): string
     {

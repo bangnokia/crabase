@@ -12,6 +12,7 @@ export type PendingAttachment = Artifact & {
 
 export function useAttachments(request: Request, draftVersion: number, context: string) {
   const entries = useRef<PendingAttachment[]>([]);
+  const nextKey = useRef(0);
   const [files, setFiles] = useState<PendingAttachment[]>([]);
   const [error, setError] = useState('');
   const refresh = () => setFiles([...entries.current]);
@@ -58,7 +59,7 @@ export function useAttachments(request: Request, draftVersion: number, context: 
     for (const file of incoming) {
       if (entries.current.length >= 10) { setError('Attach at most 10 files.'); break; }
       if (!file.size || file.size > 5 * 1024 * 1024) { setError(`${file.name}: files must be between 1 byte and 5 MB.`); continue; }
-      const entry: PendingAttachment = { key: crypto.randomUUID(), file, name: file.name, size: file.size, mime: file.type, url: URL.createObjectURL(file), progress: 0 };
+      const entry: PendingAttachment = { key: String(++nextKey.current), file, name: file.name, size: file.size, mime: file.type, url: URL.createObjectURL(file), progress: 0 };
       entries.current.push(entry);
       void upload(entry);
     }

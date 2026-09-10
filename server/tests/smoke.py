@@ -78,6 +78,11 @@ if __name__=='__main__':
         if 'rejected' in locals():rejected.close()
     first,second=Client(cookie=cookies[0]),Client(cookie=cookies[1])
     second.call('usersList',error=True)
+    second.call('health',error=True)
+    health=first.call('health')
+    assert health['checked_at'] and len(health['checks']) >= 6
+    assert {'WebSocket worker','Codex app-server','Database','Agent queue','Terminal host','Runtime storage','Workspace storage'} <= {check['name'] for check in health['checks']}
+    assert all(check['status'] in {'ok','warning','error','idle'} and check['detail'] for check in health['checks'])
     second.call('projectFolders',error=True)
     second.call('worktreeCreate',{'project_id':'invalid','branch':'feature/test'},error=True)
     second.call('project',{'path':'/'},error=True)
@@ -115,7 +120,7 @@ if __name__=='__main__':
         first.call('sync',{'chat_id':owned},error=True)
     state=first.call('sync')['state']; users={u['name']:u['id'] for u in state['users']}; assert state['projects'] and state['chats']
     workspace=first.call('projectWorkspace', {'project_id':state['projects'][0]['id']})
-    assert set(workspace)=={'paths','git','branch','changes'}
+    assert set(workspace)=={'paths','ignored','git','branch','changes'}
     folders=first.call('projectFolders')
     assert folders['parent'] is None and all(not f['name'].startswith('.') for f in folders['folders'])
     first.call('projectFolders', {'path':'/does-not-exist-crabase'}, error=True)

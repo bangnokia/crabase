@@ -68,7 +68,7 @@ final class Codex
     public function onWebSocketConnect(TcpConnection $connection, Request $request): void
     {
         $host = explode(':', $request->host())[0];
-        if (!in_array($host, ['localhost','127.0.0.1']) || !in_array($request->header('origin'), ['http://localhost:5173','http://127.0.0.1:5173','http://localhost:8787','http://127.0.0.1:8787'])) {
+        if (!Auth::allowedHost($host) || !Auth::allowedOrigin($request->header('origin'))) {
             $connection->close();
             return;
         }
@@ -143,6 +143,7 @@ final class Codex
                         : throw new \InvalidArgumentException('Administrator access required to manage projects.'),
                     'profileSave' => Auth::update($actor, $m['data'], false),
                     'usersList' => ['users'=>Auth::users($actor)],
+                    'health' => $actor['admin'] ? $this->health() : throw new \InvalidArgumentException('Administrator access required.'),
                     'userCreate' => $actor['admin'] ? Auth::create($m['data']) : throw new \InvalidArgumentException('Administrator access required.'),
                     'userUpdate' => Auth::update($actor, $m['data'], true),
                     default => \app\service\Actions::handle($m['action'], $m['data']),
@@ -220,6 +221,32 @@ final class Codex
             }
         }
         unset($client);
+    }
+
+    private function health(): array
+    {
+        $checks = [['name'=>'WebSocket worker', 'status'=>'ok', 'detail'=>'Responding']];
+        $running = is_resource($this->process) && proc_get_status($this->process)['running'];
+        $checks[] = ['name'=>'Codex app-server', 'status'=>$running && $this->ready ? 'ok' : 'warning',
+            'detail'=>$running ? ($this->ready ? 'Initialized and running' : 'Starting; not ready yet') : ($this->bootAttempted ? 'Not running' : 'Not started yet')];
+        try {
+            $models = json_decode(Setting::query()->whereKey('models')->value('value') ?? '[]', true);
+            $checks[] = ['name'=>'Database', 'status'=>'ok', 'detail'=>'Read query succeeded'];
+            $checks[] = ['name'=>'Models', 'status'=>$models ? 'ok' : 'warning', 'detail'=>count($models ?: []).' cached models; provider requests not tested'];
+            $checks[] = ['name'=>'Agent queue', 'status'=>'ok', 'detail'=>Job::query()->where('status', 'running')->count().' running · '.Job::query()->where('status', 'queued')->count().' queued'];
+        } catch (\Throwable) {
+            $checks[] = ['name'=>'Database', 'status'=>'error', 'detail'=>'Unable to read database'];
+        }
+        $terminalRunning = is_resource($this->terminalProcess) && proc_get_status($this->terminalProcess)['running'];
+        $checks[] = ['name'=>'Terminal host', 'status'=>$terminalRunning ? 'ok' : 'idle',
+            'detail'=>$terminalRunning ? 'Running' : 'Stopped; starts when a terminal is opened'];
+        foreach (['Runtime storage'=>dirname(__DIR__, 2).'/runtime', 'Workspace storage'=>config('crabase.workspace_root')] as $name=>$path) {
+            $accessible = is_dir($path) && is_readable($path) && is_writable($path);
+            $free = $accessible ? @disk_free_space($path) : false;
+            $checks[] = ['name'=>$name, 'status'=>!$accessible ? 'error' : ($free === false || $free < 1073741824 ? 'warning' : 'ok'),
+                'detail'=>!$accessible ? 'Folder missing or not readable/writable' : ($free === false ? 'Accessible; free space unavailable' : 'Accessible · '.round($free / 1073741824, 1).' GB free')];
+        }
+        return ['checked_at'=>gmdate('c'), 'checks'=>$checks];
     }
 
     private function status(string $value): void

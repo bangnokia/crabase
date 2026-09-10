@@ -21,7 +21,7 @@ global $argv;
 return [
     'webman' => [
         'handler' => Http::class,
-        'listen' => 'http://127.0.0.1:8787',
+        'listen' => 'http://0.0.0.0:8787',
         'count' => 2,
         'user' => '',
         'group' => '',
@@ -37,7 +37,7 @@ return [
     ],
     'codex' => [
         'handler' => app\process\Codex::class,
-        'listen' => 'websocket://127.0.0.1:8788',
+        'listen' => 'websocket://0.0.0.0:8788',
         'count' => 1,
         'reloadable' => false,
     ],

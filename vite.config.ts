@@ -4,6 +4,9 @@ import tailwindcss from "@tailwindcss/vite";
 export default defineConfig({
   root: "web",
   plugins: [react(), tailwindcss()],
+  resolve: { dedupe: ["react", "react-dom"] },
+  // Prebundle lazy editor entries with the app so they share the same React runtime.
+  optimizeDeps: { include: ["@pierre/diffs/react", "@pierre/diffs/edit", "@pierre/trees/react"] },
   build: { outDir: "../server/public", emptyOutDir: true },
   server: {
     port: 5173,
