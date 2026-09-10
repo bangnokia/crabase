@@ -5,6 +5,7 @@ export type Project = {
   created_order: number;
   archived: number;
   parent_id?: string | null;
+  visibility?: 'private' | 'public';
 };
 export type Chat = {
   id: string;

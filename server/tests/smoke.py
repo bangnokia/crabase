@@ -93,6 +93,41 @@ if __name__=='__main__':
         subprocess.run(['php','-r',"require 'vendor/autoload.php'; app\\service\\Store::run('INSERT INTO projects (id,name,path) VALUES (?,?,?)', [$argv[1],'Delete check',$argv[2]]);",project_id,temp],cwd=server,check=True)
         owned=first.call('create',{'project_id':project_id})['id']
         first.call('message',{'chat_id':owned,'body':'Delete fixture','mode':'note'})
+        assert first.call('projectSharing',{'project_id':project_id}) == {'visibility':'private','members':[]}
+        hidden=second.call('sync')['state']
+        assert project_id not in [p['id'] for p in hidden['projects']]
+        assert owned not in [c['id'] for c in hidden['chats']]
+        second.call('sync',{'chat_id':owned},error=True)
+        for action in ['projectWorkspace','projectFile','projectSave','projectDiff','projectContext','create','projectPin']:
+            second.call(action,{'project_id':project_id,'path':'keep.txt','pinned':True},error=True)
+        for action in ['message','archive','cancel','approval']:
+            second.call(action,{'chat_id':owned,'body':'Denied','mode':'note'},error=True)
+        request=urllib.request.Request(f'http://127.0.0.1:8787/files/{owned}/keep.txt',headers={'Cookie':cookies[1]})
+        try:
+            urllib.request.urlopen(request)
+            raise AssertionError('Private artifact accepted')
+        except urllib.error.HTTPError as error: assert error.code == 404
+        second.call('projectSharingSave',{'project_id':project_id,'visibility':'public','members':[]},error=True)
+        first.call('projectSharingSave',{'project_id':project_id,'visibility':'private','members':['missing']},error=True)
+        first.call('projectSharingSave',{'project_id':project_id,'visibility':'private','members':[accounts[1]['id']]})
+        assert second.call('sync',{'chat_id':owned})['thread']['messages'][0]['body']=='Delete fixture'
+        # Child workspaces inherit both grants and revocation from the original project.
+        child=uuid.uuid4().hex[:16]
+        subprocess.run(['php','-r',"require 'vendor/autoload.php'; app\\service\\Store::db(); app\\model\\Project::query()->create(['id'=>$argv[1],'name'=>'Child','path'=>$argv[2], 'parent_id'=>$argv[3]]); app\\service\\Store::notify();",child,temp+'/child',project_id],cwd=server,check=True)
+        child_chat=first.call('create',{'project_id':child})['id']
+        assert second.call('sync',{'chat_id':child_chat})['thread']['chat']['project_id']==child
+        second.events.clear()
+        first.call('projectSharingSave',{'project_id':project_id,'visibility':'private','members':[]})
+        revoked=second.patch('state')
+        assert revoked['access_revoked']
+        assert project_id not in [p['id'] for p in revoked['state']['projects']]
+        assert child not in [p['id'] for p in revoked['state']['projects']]
+        second.call('terminalOpen',error=True)
+        second.call('sync',{'chat_id':child_chat},error=True)
+        first.call('projectSharingSave',{'project_id':project_id,'visibility':'public','members':[]})
+        assert second.call('sync',{'chat_id':child_chat})['thread']['chat']['project_id']==child
+        second.call('projectSharingSave',{'project_id':project_id,'visibility':'private','members':[]},error=True)
+        subprocess.run(['php','-r',"require 'vendor/autoload.php'; app\\service\\Store::db(); app\\model\\Event::query()->where('chat_id',$argv[1])->delete(); app\\model\\Chat::query()->whereKey($argv[1])->delete(); app\\model\\Project::query()->whereKey($argv[2])->delete(); app\\service\\Store::notify();",child_chat,child],cwd=server,check=True)
         second.call('sync',{'chat_id':owned})
         second.call('projectArchive',{'project_id':project_id,'archived':True},error=True)
         second.call('projectDelete',{'project_id':project_id},error=True)

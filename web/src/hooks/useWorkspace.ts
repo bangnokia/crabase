@@ -131,6 +131,9 @@ export function useWorkspace(selected: string) {
           return;
         }
         if (packet.type !== "patch") return;
+        if (packet.access_revoked) {
+          setMessages([]); setArtifacts([]); setApprovals([]); setTerminals([]);
+        }
         if (packet.state)
           setData((previous) => ({ ...previous, ...packet.state }));
         if (packet.chat_id === selectedRef.current) {
@@ -193,8 +196,16 @@ export function useWorkspace(selected: string) {
         setApprovals(result.thread?.approvals || []);
         setTerminals(result.terminals || []);
       })
-      .catch((error) => {
-        if (!stale) setError(error.message);
+      .catch(async (error) => {
+        if (stale) return;
+        setError(error.message);
+        // A private/deleted chat URL must not leave the workspace stuck loading.
+        if (id) {
+          try {
+            const result = await request<{ state: Snapshot }>('sync');
+            if (!stale) { setData(result.state); setLoaded(true); }
+          } catch { /* Preserve the original error; reconnect will retry. */ }
+        }
       });
     return () => {
       stale = true;

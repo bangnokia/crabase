@@ -22,6 +22,17 @@
 .settings-group { padding: var(--space-3) var(--space-2) var(--space-1); color: var(--muted); font-size: var(--type-meta); }
 .settings-logout { margin-top: var(--space-3); }
 .settings-content { min-width: 0; }
+.project-sharing-dialog .dialog-inner { padding: var(--space-3); }
+.project-sharing-dialog p { margin: 0; }
+.project-sharing-visibility { border: 0; padding: 0; margin: 0; min-width: 0; }
+.project-sharing-visibility legend { padding: 0; font-size: var(--type-label); margin-bottom: var(--space-1); }
+.project-sharing-visibility .check-label { padding: var(--space-1) var(--space-2); }
+.project-sharing-visibility .check-label input { margin: 0; accent-color: var(--accent); }
+.project-sharing-users { max-height: 280px; overflow: auto; }
+.project-sharing-users .check-label { margin: 0; padding: 4px 8px; }
+.project-sharing-users .check-label input { margin: 0; }
+.project-sharing-users .check-label span { min-width: 0; overflow-wrap: anywhere; }
+.project-sharing-users small { display: block; }
 .settings-content h2 { font-size: var(--type-control); margin: 0; }
 .account-form { display: flex; flex-direction: column; gap: var(--space-3); }
 .profile-avatar-upload { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); margin-bottom: var(--space-4); }

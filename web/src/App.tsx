@@ -218,7 +218,7 @@ export function App() {
     />
   );
   if (route.page === "settings" || user.avatar_required) return <main className="settings-shell">
-    <SettingsPage request={request} back={() => navigate('/')} {...preferences} />
+    <SettingsPage request={request} projects={data.projects} loaded={loaded} back={() => navigate('/')} {...preferences} />
   </main>;
   return (
     <div className="app-shell">

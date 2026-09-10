@@ -1,18 +1,20 @@
 import { useEffect, useState } from "react";
 import { Check, Moon, Sun, TriangleAlert } from "lucide-react";
-import type { Account, Request } from "../types";
+import type { Account, Project, Request } from "../types";
 import { ErrorNotice } from "../components/ui";
 import { useAuth } from "../components/AuthGate";
 import { useAttachments } from '../hooks/useAttachments';
 import { AttachmentList } from '../components/AttachmentList';
 import { HealthPage } from './HealthPage';
+import { ProjectSharingDialog } from '../components/ProjectSharingDialog';
 
-export function SettingsPage({ theme, setTheme, request, back }: {
-  theme: string; setTheme: (theme: string) => void; request: Request; back: () => void;
+export function SettingsPage({ theme, setTheme, request, projects, loaded, back }: {
+  theme: string; setTheme: (theme: string) => void; request: Request; projects: Project[]; loaded: boolean; back: () => void;
 }) {
   const { user, refresh, logout } = useAuth();
   const [page, setPage] = useState('profile');
   const [error, setError] = useState('');
+  const [sharingProject, setSharingProject] = useState<Project | null>(null);
   return <div className="settings-page">{!user.avatar_required && <button className="text-button" onClick={back}>← Back to workspace</button>}<h1>Settings</h1>
     <div className="settings-layout">
       <nav className="settings-nav" aria-label="Settings">
@@ -20,6 +22,7 @@ export function SettingsPage({ theme, setTheme, request, back }: {
         <button disabled={user.avatar_required} aria-current={page === 'appearance' ? 'page' : undefined} onClick={() => setPage('appearance')}>Appearance</button>
         {!!user.admin && !user.avatar_required && <><span className="settings-group">Admin</span>
           <button aria-current={page === 'users' ? 'page' : undefined} onClick={() => setPage('users')}>Users</button>
+          <button aria-current={page === 'projects' ? 'page' : undefined} onClick={() => setPage('projects')}>Projects</button>
           <button aria-current={page === 'health' ? 'page' : undefined} onClick={() => setPage('health')}>Health</button></>}
         <button className="settings-logout" onClick={() => void logout().catch(error => setError(error.message))}>Sign out</button>
       </nav>
@@ -35,9 +38,23 @@ export function SettingsPage({ theme, setTheme, request, back }: {
           </button>)}
         </div></>}
         {page === 'users' && !!user.admin && !user.avatar_required && <UserManagement request={request} />}
+        {page === 'projects' && !!user.admin && !user.avatar_required && <>
+          <div className="settings-users-heading"><h2>Projects</h2></div>
+          <p className="muted">Select a project to manage visibility and shared users. Worktrees inherit access.</p>
+          {!loaded ? <p role="status">Loading projects…</p> : <ul className="settings-users">
+            {projects.filter(project => !project.parent_id).map(project => <li key={project.id}>
+              <button aria-label={`Sharing for ${project.name}`} onClick={() => setSharingProject(project)}>
+                <span><strong>{project.name}</strong>{!!project.archived && <small>Archived</small>}</span>
+                <small>{project.visibility === 'public' ? 'Public' : 'Private'}</small>
+              </button>
+            </li>)}
+            {!projects.length && <li className="muted">No projects yet.</li>}
+          </ul>}
+        </>}
         {page === 'health' && !!user.admin && !user.avatar_required && <HealthPage request={request} />}
       </section>
     </div>
+    {sharingProject && !!user.admin && <ProjectSharingDialog project={sharingProject} request={request} close={() => setSharingProject(null)} />}
   </div>;
 }
 

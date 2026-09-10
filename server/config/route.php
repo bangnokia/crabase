@@ -25,7 +25,8 @@ Route::get('/chat/{id}', function () {
     return is_file($index) ? response(file_get_contents($index))->header('Content-Type', 'text/html; charset=utf-8') : response('Build the frontend first.');
 });
 Route::get('/files/{chatId}/{name}', function (\support\Request $request, string $chatId, string $name) {
-    if (!\app\service\Auth::user($request->cookie(\app\service\Auth::COOKIE))) return response('Authentication required', 401);
+    if (!$actor = \app\service\Auth::user($request->cookie(\app\service\Auth::COOKIE))) return response('Authentication required', 401);
+    if (!\app\service\ProjectAccess::canChat($actor, $chatId)) return response('Not found', 404);
     if (!\app\service\Auth::allowedHost(explode(':', $request->host())[0]) || $request->header('sec-fetch-site') === 'cross-site') return response('Forbidden', 403);
     $file = \app\service\Artifacts::resolve($chatId, $name);
     if (!$file) return response('Output file not found.', 404);

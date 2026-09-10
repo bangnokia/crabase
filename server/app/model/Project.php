@@ -10,7 +10,12 @@ final class Project extends Model
     public $timestamps = false;
     public $incrementing = false;
     protected $keyType = 'string';
-    protected $fillable = ['id', 'name', 'path', 'archived', 'parent_id'];
+    protected $fillable = ['id', 'name', 'path', 'archived', 'parent_id', 'visibility'];
+
+    public function members(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'project_members', 'project_id', 'user_id');
+    }
 
     public function workspacePath(): string
     {

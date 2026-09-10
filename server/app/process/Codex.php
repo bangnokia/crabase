@@ -4,6 +4,7 @@ namespace app\process;
 
 use app\service\Store;
 use app\service\Auth;
+use app\service\ProjectAccess;
 use app\model\{Job, Chat, Message, Approval, Setting};
 use Workerman\Timer;
 use Workerman\Worker;
@@ -112,6 +113,8 @@ final class Codex
                 throw new \InvalidArgumentException('Expected id, action, and data.');
             }
             $id = $m['id'];
+            if (!empty($m['data']['project_id'])) ProjectAccess::project($actor, Store::text($m['data']['project_id'], 64));
+            if (!empty($m['data']['chat_id'])) ProjectAccess::chat($actor, Store::text($m['data']['chat_id'], 64));
             if ($m['action'] === 'models') {
                 if (!$this->process) {
                     $this->boot();
@@ -122,8 +125,8 @@ final class Codex
             } elseif ($m['action'] === 'sync') {
                 $chatId = empty($m['data']['chat_id']) ? null : Store::text($m['data']['chat_id'], 64);
                 $thread = $chatId ? Store::thread($chatId) : null;
-                $state = Store::snapshot();
-                $state['pins'] = \app\model\User::findOrFail($actor['id'])->pinnedProjects()->pluck('projects.id')->all();
+                $state = ProjectAccess::snapshot(Store::snapshot(), $actor);
+                $state['pins'] = \app\model\User::findOrFail($actor['id'])->pinnedProjects()->whereIn('projects.id', array_column($state['projects'], 'id'))->pluck('projects.id')->all();
                 $this->clients[$connection->id] = ['token'=>$this->clients[$connection->id]['token'], 'chat_id' => $chatId,'state' => $state,'thread' => $thread];
                 $result = ['state' => $state,'thread' => $thread,'terminals' => $this->terminalList($chatId)];
             } elseif (str_starts_with($m['action'], 'terminal')) {
@@ -138,6 +141,7 @@ final class Codex
                 }
                 $result = match ($m['action']) {
                     'profile' => ['user'=>$actor],
+                    'projectSharing', 'projectSharingSave' => ProjectAccess::sharing($actor, $m['data'], $m['action'] === 'projectSharingSave'),
                     'project', 'projectFolders', 'projectArchive', 'projectDelete', 'worktreeCreate' => $actor['admin']
                         ? \app\service\Actions::handle($m['action'], $m['data'])
                         : throw new \InvalidArgumentException('Administrator access required to manage projects.'),
@@ -166,7 +170,7 @@ final class Codex
             return;
         }
         $this->revision = $revision;
-        $state = Store::snapshot();
+        $snapshot = Store::snapshot();
         $threads = [];
         foreach ($this->clients as $id => &$client) {
             if (!$actor = Auth::user($client['token'])) {
@@ -179,7 +183,8 @@ final class Codex
             if ($client['state'] === null) {
                 continue;
             }
-            $state['pins'] = \app\model\User::findOrFail($actor['id'])->pinnedProjects()->pluck('projects.id')->all();
+            $state = ProjectAccess::snapshot($snapshot, $actor);
+            $state['pins'] = \app\model\User::findOrFail($actor['id'])->pinnedProjects()->whereIn('projects.id', array_column($state['projects'], 'id'))->pluck('projects.id')->all();
             $patch = ['type' => 'patch'];
             foreach ($state as $key => $value) {
                 if ($value !== $client['state'][$key]) {
@@ -190,6 +195,7 @@ final class Codex
             if ($client['chat_id'] && !in_array($client['chat_id'], array_column($state['chats'], 'id'), true)) {
                 $client['chat_id'] = null;
                 $client['thread'] = null;
+                $patch['access_revoked'] = true;
             }
             if ($chatId = $client['chat_id']) {
                 $thread = $threads[$chatId] ??= Store::thread($chatId);
@@ -641,6 +647,9 @@ final class Codex
         if (!$chatId) {
             throw new \InvalidArgumentException('Open a chat before using the terminal.');
         }
+        $actor = Auth::user($this->clients[$connection->id]['token']);
+        if (!$actor) throw new \InvalidArgumentException('Authentication required.');
+        ProjectAccess::chat($actor, $chatId);
         if ($action === 'terminalOpen') {
             $open = count(array_filter($this->terminals, fn ($terminal) => $terminal['chat_id'] === $chatId));
             if ($open >= 8) {
@@ -768,7 +777,7 @@ final class Codex
     {
         $packet += ['type' => 'terminal','chat_id' => $chatId];
         foreach ($this->clients as $id => $client) {
-            if ($client['chat_id'] === $chatId && isset($this->worker->connections[$id]) && Auth::user($client['token'])) {
+            if ($client['chat_id'] === $chatId && isset($this->worker->connections[$id]) && ($actor = Auth::user($client['token'])) && ProjectAccess::canChat($actor, $chatId)) {
                 $this->reply($this->worker->connections[$id], $packet);
             }
         }
