@@ -118,7 +118,11 @@ export function App() {
     workspace.terminals.forEach((item) => pendingTerminalIds.current.delete(item.id));
     setSeenWorkspaceTabs((seen) => {
       const next = seen.filter((tab) => !tab.startsWith("terminal:") || activeIds.has(tab) || pendingTerminalIds.current.has(tab.slice("terminal:".length)));
-      if (next.length === seen.length) return seen;
+      for (const terminal of workspace.terminals) {
+        const tab = `terminal:${terminal.id}` as WorkspaceTabId;
+        if (!next.includes(tab)) next.push(tab);
+      }
+      if (next.length === seen.length && next.every((tab, index) => tab === seen[index])) return seen;
       localStorage.setItem("crabase-workspace-tabs", JSON.stringify(next));
       return next;
     });

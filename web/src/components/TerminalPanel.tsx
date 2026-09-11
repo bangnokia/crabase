@@ -52,7 +52,7 @@ export function TerminalPanel({
   latest.current = current;
 
   useEffect(() => {
-    if (!current || !host.current) return;
+    if (!open || !current || !host.current) return;
     let disposed = false;
     let terminal: Terminal | undefined;
     let fit: FitAddon | undefined;
@@ -85,7 +85,7 @@ export function TerminalPanel({
       terminal?.dispose();
       if (terminalRef.current === terminal) terminalRef.current = undefined;
     };
-  }, [current?.id, theme]);
+  }, [open, current?.id, theme]);
 
   useEffect(() => {
     if (!current || !current.output || !host.current) return;

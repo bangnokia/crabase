@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { ChevronDown, Loader2, Terminal } from "lucide-react";
 import { MessageContent } from "../components/MessageContent";
 import { AttachmentList } from '../components/AttachmentList';
@@ -7,7 +7,7 @@ import { Avatar } from "../components/Avatar";
 import { Crab } from "../components/Crab";
 import { time } from "../lib/format";
 import { groupConversationMessages } from "../lib/messages";
-function MessageItem({
+const MessageItem = memo(function MessageItem({
   message,
   agentName,
   avatars,
@@ -57,7 +57,7 @@ function MessageItem({
       </div>
     </article>
   );
-}
+});
 function approvalText(approval: Approval) {
   try {
     const details = JSON.parse(approval.details);
@@ -87,7 +87,7 @@ export function ChatPage({
   decide: (id: number, decision: "accept" | "decline") => void;
   children: ReactNode;
 }) {
-  const messageGroups = groupConversationMessages(messages);
+  const messageGroups = useMemo(() => groupConversationMessages(messages), [messages]);
   const scroll = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   useEffect(() => {
