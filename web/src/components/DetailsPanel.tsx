@@ -10,6 +10,7 @@ export function DetailsPanel({
   loaded,
   close,
   open,
+  embedded = false,
 }: {
   artifacts: Artifact[];
   messages: Message[];
@@ -18,11 +19,12 @@ export function DetailsPanel({
   loaded: boolean;
   close: () => void;
   open: boolean;
+  embedded?: boolean;
 }) {
   return (
     <RightPanel className="details-panel" label={project ? "Project and chat details" : "Artifacts and agent activity"}
       title={project?.name || "Artifacts"} {...{ open, close }} defaultWidth={280} minWidth={240} maxWidth={500}
-      storageKey="crabase-details-width">
+      storageKey="crabase-details-width" embedded={embedded}>
       {chatSelected && (
         <div>
           {!loaded ? (

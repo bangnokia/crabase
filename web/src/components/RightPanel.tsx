@@ -15,6 +15,7 @@ export function RightPanel({
   open,
   storageKey,
   title,
+  embedded = false,
 }: {
   children: ReactNode | ((actions: ReactNode) => ReactNode);
   className?: string;
@@ -27,6 +28,7 @@ export function RightPanel({
   open: boolean;
   storageKey: string;
   title?: string;
+  embedded?: boolean;
 }) {
   const clamp = (value: number) => clampPanelWidth(value, minWidth, maxWidth);
   const [width, setWidth] = useState(() => clamp(Number(localStorage.getItem(storageKey)) || defaultWidth));
@@ -44,6 +46,14 @@ export function RightPanel({
     <IconButton label={`Close ${label.toLowerCase()}`} onClick={close}><X size={17} /></IconButton>
   </div>;
 
+  const content = typeof children === "function" ? children(embedded ? null : actions) : <>
+    <div className="right-panel-heading">
+      {title && <h2 className="truncate">{title}</h2>}
+      {actions}
+    </div>
+    {children}
+  </>;
+  if (embedded) return <div className={`right-panel-embedded ${className}`}>{content}</div>;
   return <aside
     className={`right-panel ${className} ${open ? "open" : ""} ${focused ? "focus" : ""}`}
     aria-label={label}
@@ -81,12 +91,6 @@ export function RightPanel({
           ? maxWidth : value + (event.key === "ArrowLeft" ? 16 : -16)));
       }}
     />}
-    {typeof children === "function" ? children(actions) : <>
-    <div className="right-panel-heading">
-      {title && <h2 className="truncate">{title}</h2>}
-      {actions}
-    </div>
-    {children}
-    </>}
+    {content}
   </aside>;
 }

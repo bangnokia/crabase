@@ -23,7 +23,7 @@ final class Auth
     }
     public static function avatar(string $email): string
     {
-        return 'https://www.gravatar.com/avatar/'.hash('sha256', strtolower(trim($email))).'?s=96&d=404';
+        return 'https://www.gravatar.com/avatar/'.hash('sha256', strtolower(trim($email))).'?s=96&d=mp';
     }
     public static function allowedOrigin(?string $origin): bool
     {

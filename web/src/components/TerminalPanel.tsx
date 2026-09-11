@@ -10,7 +10,6 @@ const ready = () => ghostty ??= import("ghostty-web").then(async (library) => {
   await library.init();
   return library;
 });
-const MIN_HEIGHT = 140;
 const terminalTheme = (): ITheme => {
   const styles = getComputedStyle(document.documentElement);
   const color = (name: string) => styles.getPropertyValue(name).trim();
@@ -54,21 +53,13 @@ export function TerminalPanel({
   const creating = useRef(false);
   const previousPanel = useRef({ open: false, count: 0 });
   const [active, setActive] = useState("");
-  const [height, setHeight] = useState(() => Math.min(Math.max(MIN_HEIGHT, Number(localStorage.getItem("crabase-terminal-height")) || 280), Math.max(MIN_HEIGHT, window.innerHeight - 180)));
   const current = sessions.find((session) => session.id === active) || sessions[0];
   const latest = useRef<TerminalSession | undefined>(current);
   latest.current = current;
-  const maximum = () => Math.max(MIN_HEIGHT, window.innerHeight - 180);
-  const resize = (value: number) => {
-    const next = Math.min(maximum(), Math.max(MIN_HEIGHT, value));
-    setHeight(next);
-    localStorage.setItem("crabase-terminal-height", String(next));
-  };
   const add = () => {
     if (creating.current) return;
     creating.current = true;
     request<{ terminal: TerminalSession }>("terminalOpen", { cols: 80, rows: 24 })
-      .then(({ terminal }) => setActive(terminal.id))
       .catch((error) => {
         fail(error.message);
         if (!latest.current) close();
@@ -135,51 +126,19 @@ export function TerminalPanel({
 
   return (
     <section
-      className={`terminal-panel ${open ? "open" : ""}`}
-      style={{ "--terminal-height": `${height}px` } as React.CSSProperties}
+      className={`terminal-panel ${open ? "open" : ""} terminal-embedded`}
       aria-label="Terminal"
       aria-hidden={!open}
       inert={!open}
     >
-      <div
-        className="terminal-resize"
-        role="separator"
-        tabIndex={0}
-        aria-label="Resize terminal"
-        aria-orientation="horizontal"
-        aria-valuemin={MIN_HEIGHT}
-        aria-valuemax={maximum()}
-        aria-valuenow={height}
-        onKeyDown={(event) => {
-          if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
-          event.preventDefault();
-          resize(event.key === 'Home' ? MIN_HEIGHT : event.key === 'End' ? maximum() : height + (event.key === 'ArrowUp' ? 20 : -20));
-        }}
-        onPointerDown={(event) => {
-          const target = event.currentTarget;
-          const startY = event.clientY;
-          const startHeight = height;
-          target.setPointerCapture(event.pointerId);
-          target.onpointermove = (move) => resize(startHeight + startY - move.clientY);
-          target.onpointerup = () => {
-            target.onpointermove = null;
-            target.onpointerup = null;
-          };
-        }}
-      />
-      <header className="terminal-tabs" role="tablist" aria-label="Terminal tabs">
-        {sessions.map((session) => (
-          <div className={`terminal-tab ${session.id === current?.id ? "selected" : ""}`} key={session.id}>
-            <button role="tab" aria-selected={session.id === current?.id} onClick={() => setActive(session.id)}>
-              {session.title}{!session.running && " (exited)"}
-            </button>
-            <IconButton label={`Close ${session.title}`} onClick={() => void request("terminalClose", { terminal_id: session.id }).catch((error) => fail(error.message))}>
-              <X size={13} />
-            </IconButton>
-          </div>
-        ))}
+      <header className="terminal-tabs" role="tablist" aria-label="Terminal sessions">
+        {sessions.map((session) => <div className={`terminal-tab ${session.id === current?.id ? "selected" : ""}`} key={session.id}>
+          <button role="tab" aria-selected={session.id === current?.id} onClick={() => setActive(session.id)}>
+            {session.title}{!session.running && " (exited)"}
+          </button>
+          <IconButton label={`Close ${session.title}`} onClick={() => void request("terminalClose", { terminal_id: session.id }).catch((error) => fail(error.message))}><X size={13} /></IconButton>
+        </div>)}
         <IconButton label="New terminal" onClick={add}><Plus size={15} /></IconButton>
-        <IconButton label="Hide terminal" className="terminal-hide" onClick={close}><X size={15} /></IconButton>
       </header>
       <div className="terminal-screen" ref={host}>
         {!current && <p className="terminal-empty" role="status">Opening terminal…</p>}

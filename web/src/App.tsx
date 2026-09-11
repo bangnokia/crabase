@@ -19,6 +19,7 @@ import { SearchDialog } from "./components/WorkspaceDialogs";
 import { SettingsPage } from "./pages/SettingsPage";
 import { NewChatPage } from "./pages/NewChatPage";
 import { ChatPage } from "./pages/ChatPage";
+import { WorkspacePanel, type WorkspaceTab } from "./components/WorkspacePanel";
 export function App() {
   const { user } = useAuth();
   const { route, navigate } = useRoute();
@@ -50,10 +51,44 @@ export function App() {
   const [sidebarHidden, setSidebarHidden] = useState(
     () => localStorage.getItem("crabase-sidebar-hidden") === "true",
   );
-  const [details, setDetails] = useState(() => localStorage.getItem("crabase-details-open") === "true");
-  const [code, setCode] = useState(() => localStorage.getItem("crabase-code-open") === "true");
+  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab | "">(
+    () => (localStorage.getItem("crabase-workspace-tab") === "details" ? "artifacts" : localStorage.getItem("crabase-workspace-tab") as WorkspaceTab | "") || "",
+  );
+  const [seenWorkspaceTabs, setSeenWorkspaceTabs] = useState<WorkspaceTab[]>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("crabase-workspace-tabs") || "[\"artifacts\"]");
+      return Array.isArray(saved) ? Array.from(new Set(["artifacts", ...saved])).filter((tab): tab is WorkspaceTab => ["artifacts", "code", "terminal"].includes(tab)) : ["artifacts"];
+    } catch { return ["artifacts"]; }
+  });
+  useEffect(() => localStorage.setItem("crabase-workspace-tab", workspaceTab), [workspaceTab]);
+  const lastWorkspaceTab = useRef<WorkspaceTab>(workspaceTab || "artifacts");
+  if (workspaceTab) lastWorkspaceTab.current = workspaceTab;
+  const details = workspaceTab === "artifacts";
+  const code = workspaceTab === "code";
+  const selectWorkspace = (tab: WorkspaceTab) => {
+    setSeenWorkspaceTabs((seen) => {
+      const nextSeen = seen.includes(tab) ? seen : [...seen, tab];
+      localStorage.setItem("crabase-workspace-tabs", JSON.stringify(nextSeen));
+      return nextSeen;
+    });
+    setWorkspaceTab(tab);
+  };
+  const setWorkspace = (tab: WorkspaceTab) => {
+    if (workspaceTab === tab) setWorkspaceTab("");
+    else selectWorkspace(tab);
+  };
+  const removeWorkspaceTab = (tab: WorkspaceTab) => setSeenWorkspaceTabs((seen) => {
+    if (seen.length <= 1) return seen;
+    const nextSeen = seen.filter((item) => item !== tab);
+    localStorage.setItem("crabase-workspace-tabs", JSON.stringify(nextSeen));
+    if (workspaceTab === tab) setWorkspaceTab(nextSeen[0] || "");
+    return nextSeen;
+  });
   const [fileSearch, setFileSearch] = useState(false);
-  const [terminal, setTerminal] = useState(false);
+  const terminal = workspaceTab === "terminal";
+  const [workspaceDock, setWorkspaceDock] = useState<"bottom" | "right">(
+    () => (localStorage.getItem("crabase-workspace-dock") as "bottom" | "right") || (localStorage.getItem("crabase-terminal-dock") as "bottom" | "right") || "right",
+  );
   const [toast, setToast] = useState("");
   const chat = data.chats.find((item) => item.id === selected);
   const project = data.projects.find(
@@ -66,7 +101,7 @@ export function App() {
     setDialog("");
     clearDraft();
     setError("");
-    setTerminal(false);
+    setWorkspaceTab("");
   }
   function newChat(id = "") {
     setFileSearch(false);
@@ -76,7 +111,7 @@ export function App() {
     setDialog("");
     clearDraft();
     setError("");
-    setTerminal(false);
+    setWorkspaceTab("");
   }
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
@@ -86,7 +121,7 @@ export function App() {
         !event.shiftKey && !event.altKey && !event.isComposing && project) {
         if (document.querySelector('dialog[open]:not(.file-palette)')) return;
         event.preventDefault();
-        setCode(true);
+        setWorkspaceTab("code");
         setFileSearch(true);
         document.querySelector<HTMLInputElement>('.file-palette input')?.focus();
       }
@@ -110,13 +145,18 @@ export function App() {
       }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "j" && selected) {
         event.preventDefault();
-        setTerminal((visible) => !visible);
+        setWorkspace("terminal");
+      }
+      if ((event.metaKey || event.ctrlKey) && event.key === "\\" && selected) {
+        event.preventDefault();
+        if (workspaceTab) setWorkspaceTab("");
+        else setWorkspace("artifacts");
       }
       if (event.key === "Escape") setSidebar(false);
     };
     window.addEventListener("keydown", key, true);
     return () => window.removeEventListener("keydown", key, true);
-  }, [navigate, selected, project?.id]);
+  }, [navigate, selected, project?.id, workspaceTab]);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(""), 2600);
@@ -217,6 +257,31 @@ export function App() {
       restore={() => void archive()}
     />
   );
+  const toggleWorkspaceDock = () => setWorkspaceDock((dock) => {
+    const next = dock === "bottom" ? "right" : "bottom";
+    localStorage.setItem("crabase-workspace-dock", next);
+    return next;
+  });
+  const visibleWorkspaceTab = workspaceTab || (lastWorkspaceTab.current === "code" && !project ? "artifacts" : lastWorkspaceTab.current);
+  const workspacePanel = selected && loaded && <WorkspacePanel
+    active={visibleWorkspaceTab}
+    codeAvailable={!!project}
+    dock={workspaceDock}
+    open={!!workspaceTab}
+    seenTabs={seenWorkspaceTabs}
+    onTab={setWorkspace}
+    onSelectTab={selectWorkspace}
+    onRemoveTab={removeWorkspaceTab}
+    onClose={() => setWorkspaceTab("")}
+    onDock={toggleWorkspaceDock}
+  >
+    {visibleWorkspaceTab === "code" && project && <CodePanel project={project} request={request} theme={preferences.theme}
+      fileSearch={fileSearch} closeFileSearch={() => setFileSearch(false)} open={code} close={() => setWorkspaceTab("")} embedded />}
+    {visibleWorkspaceTab === "artifacts" && <DetailsPanel artifacts={workspace.artifacts} messages={messages} project={project}
+      chatSelected={!!selected} loaded={loaded} open={details} close={() => setWorkspaceTab("")} embedded />}
+    {visibleWorkspaceTab === "terminal" && <TerminalPanel sessions={workspace.terminals} request={request} close={() => setWorkspaceTab("")}
+      fail={setError} theme={preferences.theme} open={terminal} />}
+  </WorkspacePanel>;
   if (route.page === "settings" || user.avatar_required) return <main className="settings-shell">
     <SettingsPage request={request} projects={data.projects} loaded={loaded} back={() => navigate('/')} {...preferences} />
   </main>;
@@ -258,11 +323,11 @@ export function App() {
             setSidebar(true);
             setSidebarHidden(false);
           }}
-          toggleDetails={() => setDetails(!details)}
+          toggleDetails={() => setWorkspace("artifacts")}
           detailsOpen={details}
-          toggleCode={() => setCode((visible) => !visible)}
+          toggleCode={() => setWorkspace("code")}
           codeOpen={code}
-          toggleTerminal={() => setTerminal((visible) => !visible)}
+          toggleTerminal={() => setWorkspace("terminal")}
           terminalOpen={terminal}
           copy={() =>
             void navigator.clipboard
@@ -302,29 +367,9 @@ export function App() {
             )}
           </div>
         </div>
-        {selected && loaded && (
-          <TerminalPanel
-            sessions={workspace.terminals}
-            request={request}
-            close={() => setTerminal(false)}
-            fail={setError}
-            theme={preferences.theme}
-            open={terminal}
-          />
-        )}
+        {workspaceDock === "bottom" && workspacePanel}
       </main>
-      {project && <CodePanel project={project} request={request} theme={preferences.theme}
-        fileSearch={fileSearch} closeFileSearch={() => setFileSearch(false)}
-        open={code} close={() => { setCode(false); setFileSearch(false); }} />}
-      <DetailsPanel
-        artifacts={workspace.artifacts}
-        messages={messages}
-        project={project}
-        chatSelected={!!selected}
-        loaded={loaded}
-        open={details}
-        close={() => setDetails(false)}
-      />
+      {workspaceDock === "right" && workspacePanel}
       {toast && (
         <div className="toast" role="status">
           <Check size={16} />

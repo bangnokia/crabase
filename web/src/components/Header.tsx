@@ -72,7 +72,7 @@ export function Header({
         </IconButton>}
         <IconButton
           className={detailsOpen ? "active" : ""}
-          label={project ? "Project and chat details" : "Artifacts and agent activity"}
+          label={`${detailsOpen ? "Hide" : "Open"} artifacts`}
           aria-pressed={detailsOpen}
           onClick={toggleDetails}
         >

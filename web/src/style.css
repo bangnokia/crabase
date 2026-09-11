@@ -376,7 +376,7 @@ small {
 .viewport-menu {
   position: fixed;
   right: auto;
-  z-index: 20;
+  z-index: 100;
   max-width: calc(100vw - 16px);
   max-height: calc(100vh - 16px);
   overflow-y: auto;
@@ -605,9 +605,171 @@ small {
   flex: 1;
   display: flex;
   flex-direction: column;
+  position: relative;
   transition:
     width var(--motion-panel) var(--ease-panel),
     flex-grow var(--motion-panel) var(--ease-panel);
+}
+.workspace-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--paper);
+  overflow: hidden;
+  border-top: 0 solid var(--line);
+  z-index: 3;
+}
+.workspace-right {
+  position: relative;
+  width: 0;
+  flex: 0 0 0;
+  border-top: 0;
+  border-left: 0 solid var(--line);
+  background: var(--surface);
+  transition:
+    width var(--motion-panel) var(--ease-panel),
+    flex-basis var(--motion-panel) var(--ease-panel),
+    border-width var(--motion-panel) var(--ease-panel);
+}
+.workspace-right.open {
+  width: var(--workspace-width);
+  flex-basis: var(--workspace-width);
+  border-left-width: 1px;
+}
+.workspace-right > *:not(.workspace-resize) {
+  min-width: min(var(--workspace-width), calc(100vw - 48px));
+}
+.workspace-right.open.focus {
+  width: 0;
+  flex-grow: 1;
+}
+.main-panel:has(+ .workspace-panel.focus) {
+  width: 0;
+  flex: 0 0 0;
+  overflow: hidden;
+}
+.workspace-bottom {
+  flex: 0 0 0;
+  height: 0;
+  transition:
+    height var(--motion-panel) var(--ease-panel),
+    flex-basis var(--motion-panel) var(--ease-panel),
+    border-width var(--motion-panel) var(--ease-panel);
+}
+.workspace-bottom.open {
+  flex-basis: var(--workspace-height);
+  height: var(--workspace-height);
+  border-top-width: 1px;
+}
+.workspace-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 36px;
+  padding: 0 var(--space-2);
+  background: var(--surface);
+  color: var(--subtle);
+}
+.workspace-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  overflow-x: auto;
+}
+.workspace-tab-item {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-small);
+}
+.workspace-tab-item:hover,
+.workspace-tab-item.active {
+  background: var(--hover);
+}
+.workspace-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 28px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-small) 0 0 var(--radius-small);
+  color: inherit;
+  background: transparent;
+  font: var(--weight-regular) var(--type-meta) / 1 var(--font-sans);
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease;
+}
+.workspace-tab-close {
+  width: 24px;
+  height: 24px;
+  border-radius: 0 var(--radius-small) var(--radius-small) 0;
+}
+.workspace-tab:hover,
+.workspace-tab.active {
+  color: var(--text);
+  background: var(--hover);
+}
+.workspace-heading > .icon-button:first-of-type {
+  margin-left: auto;
+}
+.workspace-body,
+.workspace-body > .right-panel-embedded {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+.workspace-body > .right-panel-embedded > .right-panel-heading {
+  display: none;
+}
+.workspace-body > .right-panel-embedded.details-panel {
+  padding: var(--space-3) var(--space-2);
+  overflow: auto;
+  background: var(--surface);
+}
+.workspace-body .terminal-panel.terminal-embedded {
+  position: relative;
+  inset: auto;
+  width: auto;
+  height: auto;
+  flex: 1;
+  border: 0;
+  visibility: visible;
+}
+.workspace-body .terminal-panel.terminal-embedded .terminal-resize,
+.workspace-body .terminal-panel.terminal-embedded .terminal-dock,
+.workspace-body .terminal-panel.terminal-embedded .terminal-hide {
+  display: none;
+}
+.workspace-resize {
+  position: absolute;
+  inset: 0 auto 0 -4px;
+  z-index: 10;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+  background: transparent;
+}
+.workspace-resize:hover::after,
+.workspace-resize:focus-visible::after {
+  content: "";
+  position: absolute;
+  inset: 0 3px;
+  background: var(--line);
+}
+.workspace-bottom .workspace-resize {
+  display: none;
+}
+.workspace-bottom .workspace-resize-bottom {
+  display: block;
+  inset: -4px 0 auto;
+  width: auto;
+  height: 8px;
+  cursor: row-resize;
 }
 .topbar {
   height: 48px;
@@ -681,6 +843,23 @@ small {
   visibility: visible;
   transition-delay: 0s;
 }
+.terminal-panel.terminal-right {
+  position: absolute;
+  z-index: 4;
+  top: 48px;
+  right: 0;
+  bottom: 0;
+  width: min(420px, 42vw);
+  height: auto;
+  border-top: 0;
+  border-left: 1px solid var(--line);
+}
+.terminal-panel.terminal-right .terminal-resize {
+  inset: 0 auto 0 -4px;
+  width: 8px;
+  height: auto;
+  cursor: col-resize;
+}
 .terminal-resize {
   position: absolute;
   z-index: 2;
@@ -704,7 +883,6 @@ small {
   align-items: center;
   gap: var(--space-1);
   padding: 0 var(--space-2);
-  border-bottom: 1px solid var(--line);
   background: var(--surface);
   color: var(--subtle);
   overflow-x: auto;
@@ -733,6 +911,12 @@ small {
 }
 .terminal-hide {
   margin-left: auto;
+}
+.terminal-dock {
+  margin-left: auto;
+}
+.terminal-dock + .terminal-hide {
+  margin-left: 0;
 }
 .terminal-screen {
   min-height: 0;
@@ -1290,7 +1474,7 @@ small {
   padding: var(--space-1) var(--space-2);
   border: 0;
   border-radius: 0;
-  --navigator-bg: color-mix(in srgb, var(--paper) 75%, var(--sidebar));
+  --navigator-bg: var(--surface);
   background: var(--navigator-bg);
   overflow: hidden;
 }
@@ -1857,6 +2041,50 @@ legend {
     padding: var(--space-4);
   }
 }
+@media (max-width: 760px) {
+  .workspace-right {
+    position: fixed;
+    inset: 48px 0 0;
+    z-index: 30;
+    width: 100%;
+    flex: none;
+    border-left-width: 0;
+    transform: translateX(100%);
+    visibility: hidden;
+    transition:
+      transform var(--motion-panel) var(--ease-panel),
+      visibility 0s linear var(--motion-panel);
+  }
+  .workspace-right.open {
+    width: 100%;
+    transform: translateX(0);
+    visibility: visible;
+    transition-delay: 0s;
+  }
+  .workspace-right.focus {
+    width: auto;
+  }
+  .terminal-panel.terminal-right {
+    position: relative;
+    top: auto;
+    right: auto;
+    bottom: auto;
+    width: auto;
+    height: 0;
+    border-left: 0;
+  }
+  .terminal-panel.terminal-right.open {
+    height: var(--terminal-height);
+    border-left: 0;
+    border-top-width: 1px;
+  }
+  .terminal-panel.terminal-right .terminal-resize {
+    inset: -4px 0 auto;
+    width: auto;
+    height: 8px;
+    cursor: row-resize;
+  }
+}
 @media (pointer: coarse) {
   .icon-button,
   .button,
@@ -1887,8 +2115,11 @@ legend {
   .sidebar,
   .sidebar-scrim,
   .right-panel,
-  .terminal-panel {
+  .terminal-panel,
+  .workspace-panel,
+  .workspace-body {
     transition: none !important;
+    animation: none !important;
   }
 }
 
