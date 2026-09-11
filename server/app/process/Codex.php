@@ -410,7 +410,9 @@ final class Codex
             $project = Chat::query()->find($next['chat_id'])?->project;
             if ($project?->parent_id) $next['path'] = $project->workspacePath();
             if (!$next['path']) {
-                $next['path'] = dirname(__DIR__, 2).'/runtime/chats/'.$next['chat_id'];
+                $workspaceRoot = realpath(config('crabase.workspace_root'));
+                if (!$workspaceRoot || !is_dir($workspaceRoot)) throw new \RuntimeException('Workspace folder is unavailable.');
+                $next['path'] = $workspaceRoot.'/.chats/'.$next['chat_id'];
                 if (!is_dir($next['path']) && !mkdir($next['path'], 0700, true)) {
                     throw new \RuntimeException('Could not create chat directory.');
                 }
@@ -651,16 +653,17 @@ final class Codex
         if (!$actor) throw new \InvalidArgumentException('Authentication required.');
         ProjectAccess::chat($actor, $chatId);
         if ($action === 'terminalOpen') {
-            $open = count(array_filter($this->terminals, fn ($terminal) => $terminal['chat_id'] === $chatId));
-            if ($open >= 8) {
-                throw new \InvalidArgumentException('Close a terminal before opening another.');
-            }
             $row = Chat::query()->with('project')->find($chatId);
             if (!$row) {
                 throw new \InvalidArgumentException('Conversation not found.');
             }
             $path = $row->project?->workspacePath();
-            $cwd = $path ?: dirname(__DIR__, 2).'/runtime/chats/'.$chatId;
+            if (!$path) {
+                $workspaceRoot = realpath(config('crabase.workspace_root'));
+                if (!$workspaceRoot || !is_dir($workspaceRoot)) throw new \RuntimeException('Workspace folder is unavailable.');
+                $path = $workspaceRoot.'/.chats/'.$chatId;
+            }
+            $cwd = $path;
             if (!$path && !is_dir($cwd) && !mkdir($cwd, 0700, true)) {
                 throw new \RuntimeException('Could not create the chat directory.');
             }

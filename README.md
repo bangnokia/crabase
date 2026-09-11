@@ -178,7 +178,7 @@ Keep this application checkout dedicated to deployment—do not use it as a team
 | --- | --- |
 | `/home/crabase/crabase/.env` | Server configuration and OAuth secret |
 | `/home/crabase/crabase/server/runtime/` | Default SQLite database, uploaded avatars, standalone-chat folders and runtime files |
-| `/home/crabase/workspaces/` | Original project repositories, `.worktrees`, `.artifacts` and staged attachments |
+| `/home/crabase/workspaces/` | Original project repositories, `.worktrees`, `.chats`, `.artifacts` and staged attachments |
 | `/home/crabase/.codex/` | Codex configuration, authentication and thread history (or the configured Codex data directory) |
 
 If `CRABASE_DB` is overridden, back up that database and its adjacent `avatars/` directory too. Worktrees depend on the original repositories' Git metadata: preserve both, including ignored project data such as `.env` and SQLite files. Never run `git clean -fdx` or deploy with a broad `rsync --delete` across these paths.
@@ -295,7 +295,7 @@ The smoke check uses two real WebSocket clients to verify commands, origin rejec
 
 After static HTML/JS/CSS load, all workspace data and commands use one WebSocket connection. There are no GET/POST refresh loops or HTTP fallback. Clients send `{id, action, data}` and receive `{id, result}` or `{id, error}`. `sync` provides initial state and subscribes to an optional `chat_id`; subsequent `patch` events contain changed state collections, message upserts, text appends, and pending approvals. Reconnects resynchronize state; unacknowledged writes are reported as uncertain and never automatically replayed.
 
-Regular chats have no project. A project is any existing readable directory on the shared machine, whether or not it contains code or Git. Selecting a project starts its threads in that directory. Standalone agent chats use a private scratch directory under `server/runtime/chats/<chat-id>`. Existing project associations are preserved during migration.
+Regular chats have no project. A project is any existing readable directory on the shared machine, whether or not it contains code or Git. Selecting a project starts its threads in that directory. Standalone agent chats use a private scratch directory under `CRABASE_WORKSPACE_ROOT/.chats/<chat-id>`. Existing project associations are preserved during migration.
 
 ## Collaboration accounts
 

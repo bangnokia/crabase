@@ -1,9 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import type { FitAddon, ITheme, Terminal } from "ghostty-web";
-import { Plus, X } from "lucide-react";
 import type { Request, TerminalSession } from "../types";
-import { IconButton } from "./ui";
-import { terminalPanelAction } from "../lib/terminal-panel";
 
 let ghostty: Promise<typeof import("ghostty-web")> | undefined;
 const ready = () => ghostty ??= import("ghostty-web").then(async (library) => {
@@ -33,16 +30,16 @@ const terminalTheme = (): ITheme => {
 };
 
 export function TerminalPanel({
+  terminalId,
   sessions,
   request,
-  close,
   fail,
   theme,
   open,
 }: {
+  terminalId: string;
   sessions: TerminalSession[];
   request: Request;
-  close: () => void;
   fail: (message: string) => void;
   theme: string;
   open: boolean;
@@ -50,33 +47,12 @@ export function TerminalPanel({
   const host = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | undefined>(undefined);
   const renderedOutput = useRef("");
-  const creating = useRef(false);
-  const previousPanel = useRef({ open: false, count: 0 });
-  const [active, setActive] = useState("");
-  const current = sessions.find((session) => session.id === active) || sessions[0];
+  const current = sessions.find((session) => session.id === terminalId);
   const latest = useRef<TerminalSession | undefined>(current);
   latest.current = current;
-  const add = () => {
-    if (creating.current) return;
-    creating.current = true;
-    request<{ terminal: TerminalSession }>("terminalOpen", { cols: 80, rows: 24 })
-      .catch((error) => {
-        fail(error.message);
-        if (!latest.current) close();
-      })
-      .finally(() => { creating.current = false; });
-  };
 
   useEffect(() => {
-    const next = { open, count: sessions.length };
-    const action = terminalPanelAction(previousPanel.current, next);
-    previousPanel.current = next;
-    if (action === "create") add();
-    if (action === "hide") close();
-  }, [open, sessions.length]);
-
-  useEffect(() => {
-    if (!open || !current || !host.current) return;
+    if (!current || !host.current) return;
     let disposed = false;
     let terminal: Terminal | undefined;
     let fit: FitAddon | undefined;
@@ -109,7 +85,7 @@ export function TerminalPanel({
       terminal?.dispose();
       if (terminalRef.current === terminal) terminalRef.current = undefined;
     };
-  }, [open, current?.id, theme]);
+  }, [current?.id, theme]);
 
   useEffect(() => {
     if (!current || !current.output || !host.current) return;
@@ -131,15 +107,6 @@ export function TerminalPanel({
       aria-hidden={!open}
       inert={!open}
     >
-      <header className="terminal-tabs" role="tablist" aria-label="Terminal sessions">
-        {sessions.map((session) => <div className={`terminal-tab ${session.id === current?.id ? "selected" : ""}`} key={session.id}>
-          <button role="tab" aria-selected={session.id === current?.id} onClick={() => setActive(session.id)}>
-            {session.title}{!session.running && " (exited)"}
-          </button>
-          <IconButton label={`Close ${session.title}`} onClick={() => void request("terminalClose", { terminal_id: session.id }).catch((error) => fail(error.message))}><X size={13} /></IconButton>
-        </div>)}
-        <IconButton label="New terminal" onClick={add}><Plus size={15} /></IconButton>
-      </header>
       <div className="terminal-screen" ref={host}>
         {!current && <p className="terminal-empty" role="status">Opening terminal…</p>}
       </div>

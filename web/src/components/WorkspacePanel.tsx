@@ -3,17 +3,20 @@ import { FileCode2, Info, Maximize2, Minimize2, PanelBottom, PanelRight, Plus, S
 import { IconButton, Menu, MenuItem } from "./ui";
 import { clampPanelWidth } from "../lib/layout";
 
-export type WorkspaceTab = "code" | "artifacts" | "terminal";
+export type WorkspaceTab = "code" | "artifacts";
+export type WorkspaceTabId = WorkspaceTab | `terminal:${string}`;
 
-export function WorkspacePanel({ active, codeAvailable, dock, open, seenTabs, onTab, onSelectTab, onRemoveTab, onClose, onDock, children }: {
-  active: WorkspaceTab;
+export function WorkspacePanel({ active, codeAvailable, dock, open, seenTabs, terminalTabs, onTab, onSelectTab, onAddTerminal, onRemoveTab, onClose, onDock, children }: {
+  active: WorkspaceTabId;
   codeAvailable: boolean;
   dock: "bottom" | "right";
   open: boolean;
-  seenTabs: WorkspaceTab[];
-  onTab: (tab: WorkspaceTab) => void;
+  seenTabs: WorkspaceTabId[];
+  terminalTabs: { id: string; title: string; running: boolean }[];
+  onTab: (tab: WorkspaceTabId) => void;
   onSelectTab: (tab: WorkspaceTab) => void;
-  onRemoveTab: (tab: WorkspaceTab) => void;
+  onAddTerminal: () => void;
+  onRemoveTab: (tab: WorkspaceTabId) => void;
   onClose: () => void;
   onDock: () => void;
   children: ReactNode;
@@ -32,15 +35,21 @@ export function WorkspacePanel({ active, codeAvailable, dock, open, seenTabs, on
     setWidth(next);
     localStorage.setItem("crabase-workspace-width", String(next));
   };
-  const tabs = [
+  const staticTabs = [
     ["code", "Code", FileCode2],
     ["artifacts", "Artifacts", Info],
-    ["terminal", "Terminal", SquareTerminal],
   ] as const;
-  const visibleTabs = seenTabs
-    .map((id) => tabs.find((tab) => tab[0] === id))
-    .filter((tab): tab is (typeof tabs)[number] => !!tab && (tab[0] !== "code" || codeAvailable));
-  const availableTabs = tabs.filter(([id]) => (id === "terminal" || !seenTabs.includes(id)) && (id !== "code" || codeAvailable));
+  const terminalById = new Map(terminalTabs.map((tab) => [tab.id, tab]));
+  const tabIds = [...seenTabs, ...terminalTabs.map((tab) => `terminal:${tab.id}` as const).filter((id) => !seenTabs.includes(id))];
+  const visibleTabs = tabIds.flatMap((id) => {
+    if (id.startsWith("terminal:")) {
+      const terminal = terminalById.get(id.slice("terminal:".length));
+      return terminal ? [{ id, label: `${terminal.title}${terminal.running ? "" : " (exited)"}`, Icon: SquareTerminal }] : [];
+    }
+    const tab = staticTabs.find((item) => item[0] === id);
+    return tab && (tab[0] !== "code" || codeAvailable) ? [{ id, label: tab[1], Icon: tab[2] }] : [];
+  });
+  const availableTabs = staticTabs.filter(([id]) => !seenTabs.includes(id) && (id !== "code" || codeAvailable));
   return <aside className={`workspace-panel workspace-${dock} ${open ? "open" : ""} ${focused ? "focus" : ""}`} aria-hidden={!open} inert={!open} style={{ "--workspace-width": `${width}px`, "--workspace-height": `${height}px` } as CSSProperties}>
     <div className="workspace-resize" role="separator" aria-label="Resize workspace" tabIndex={0}
       onPointerDown={(event) => { if (event.button !== 0) return; event.currentTarget.setPointerCapture(event.pointerId); dragOffset.current = width - (window.innerWidth - event.clientX); }}
@@ -54,13 +63,14 @@ export function WorkspacePanel({ active, codeAvailable, dock, open, seenTabs, on
       onKeyDown={(event) => { if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return; event.preventDefault(); const next = event.key === "Home" ? 140 : event.key === "End" ? window.innerHeight - 180 : Math.min(Math.max(140, height + (event.key === "ArrowUp" ? 20 : -20)), window.innerHeight - 180); setHeight(next); localStorage.setItem("crabase-terminal-height", String(next)); }} />}
     <header className="workspace-heading" role="tablist" aria-label="Workspace">
       <div className="workspace-tabs">
-        {visibleTabs.map(([id, label, Icon]) => <span className={`workspace-tab-item ${active === id ? "active" : ""}`} key={id}>
+        {visibleTabs.map(({ id, label, Icon }) => <span className={`workspace-tab-item ${active === id ? "active" : ""}`} key={id}>
           <button className="workspace-tab" role="tab" aria-selected={active === id} onClick={() => onTab(id)}><Icon size={15} />{label}</button>
           <IconButton className="workspace-tab-close" label={`Remove ${label} tab`} onClick={() => onRemoveTab(id)}><X size={12} /></IconButton>
         </span>)}
       </div>
       <Menu label="Add workspace tab" icon={<Plus size={15} />} viewport>
         {availableTabs.map(([id, label]) => <MenuItem key={id} onClick={() => onSelectTab(id)}>{label}</MenuItem>)}
+        <MenuItem onClick={onAddTerminal}>Terminal</MenuItem>
       </Menu>
       {dock === "right" && <IconButton label={focused ? "Exit workspace focus mode" : "Focus workspace"} aria-pressed={focused} onClick={() => setFocused((value) => !value)}>
         {focused ? <Minimize2 size={15} /> : <Maximize2 size={15} />}

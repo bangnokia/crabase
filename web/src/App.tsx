@@ -1,4 +1,4 @@
-import type { Project } from "./types";
+import type { Project, TerminalSession } from "./types";
 import { ProjectDialog } from "./components/ProjectDialog";
 import { WorktreeDialog } from "./components/WorktreeDialog";
 import { useAuth } from "./components/AuthGate";
@@ -19,7 +19,7 @@ import { SearchDialog } from "./components/WorkspaceDialogs";
 import { SettingsPage } from "./pages/SettingsPage";
 import { NewChatPage } from "./pages/NewChatPage";
 import { ChatPage } from "./pages/ChatPage";
-import { WorkspacePanel, type WorkspaceTab } from "./components/WorkspacePanel";
+import { WorkspacePanel, type WorkspaceTab, type WorkspaceTabId } from "./components/WorkspacePanel";
 export function App() {
   const { user } = useAuth();
   const { route, navigate } = useRoute();
@@ -51,17 +51,21 @@ export function App() {
   const [sidebarHidden, setSidebarHidden] = useState(
     () => localStorage.getItem("crabase-sidebar-hidden") === "true",
   );
-  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab | "">(
-    () => (localStorage.getItem("crabase-workspace-tab") === "details" ? "artifacts" : localStorage.getItem("crabase-workspace-tab") as WorkspaceTab | "") || "",
+  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTabId | "">(
+    () => {
+      const saved = localStorage.getItem("crabase-workspace-tab") || "";
+      return saved === "details" ? "artifacts" : saved === "code" || saved === "artifacts" || saved.startsWith("terminal:") ? saved as WorkspaceTabId : "";
+    },
   );
-  const [seenWorkspaceTabs, setSeenWorkspaceTabs] = useState<WorkspaceTab[]>(() => {
+  const [seenWorkspaceTabs, setSeenWorkspaceTabs] = useState<WorkspaceTabId[]>(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("crabase-workspace-tabs") || "[\"artifacts\"]");
-      return Array.isArray(saved) ? Array.from(new Set(["artifacts", ...saved])).filter((tab): tab is WorkspaceTab => ["artifacts", "code", "terminal"].includes(tab)) : ["artifacts"];
+      return Array.isArray(saved) ? Array.from(new Set(saved)).filter((tab): tab is WorkspaceTabId => tab === "artifacts" || tab === "code" || (typeof tab === "string" && tab.startsWith("terminal:") && tab.length > 9)) : ["artifacts"];
     } catch { return ["artifacts"]; }
   });
   useEffect(() => localStorage.setItem("crabase-workspace-tab", workspaceTab), [workspaceTab]);
-  const lastWorkspaceTab = useRef<WorkspaceTab>(workspaceTab || "artifacts");
+  const lastWorkspaceTab = useRef<WorkspaceTabId>(workspaceTab || "artifacts");
+  const pendingTerminalIds = useRef(new Set<string>());
   if (workspaceTab) lastWorkspaceTab.current = workspaceTab;
   const details = workspaceTab === "artifacts";
   const code = workspaceTab === "code";
@@ -77,15 +81,68 @@ export function App() {
     if (workspaceTab === tab) setWorkspaceTab("");
     else selectWorkspace(tab);
   };
-  const removeWorkspaceTab = (tab: WorkspaceTab) => setSeenWorkspaceTabs((seen) => {
-    if (seen.length <= 1) return seen;
-    const nextSeen = seen.filter((item) => item !== tab);
-    localStorage.setItem("crabase-workspace-tabs", JSON.stringify(nextSeen));
-    if (workspaceTab === tab) setWorkspaceTab(nextSeen[0] || "");
-    return nextSeen;
-  });
+  const openTerminal = async () => {
+    try {
+      const { terminal } = await request<{ terminal: TerminalSession }>("terminalOpen", { cols: 80, rows: 24 });
+      const tab = `terminal:${terminal.id}` as const;
+      pendingTerminalIds.current.add(terminal.id);
+      setSeenWorkspaceTabs((seen) => {
+        const nextSeen = seen.includes(tab) ? seen : [...seen, tab];
+        localStorage.setItem("crabase-workspace-tabs", JSON.stringify(nextSeen));
+        return nextSeen;
+      });
+      setWorkspaceTab(tab);
+    } catch (error) {
+      setError((error as Error).message);
+    }
+  };
+  const removeWorkspaceTab = (tab: WorkspaceTabId) => {
+    if (tab.startsWith("terminal:")) {
+      const id = tab.slice("terminal:".length);
+      pendingTerminalIds.current.delete(id);
+      void request("terminalClose", { terminal_id: id }).catch((error) => setError((error as Error).message));
+    }
+    setSeenWorkspaceTabs((seen) => {
+      const nextSeen = seen.filter((item) => item !== tab);
+      localStorage.setItem("crabase-workspace-tabs", JSON.stringify(nextSeen));
+      if (workspaceTab === tab) setWorkspaceTab(nextSeen[0] || "");
+      return nextSeen;
+    });
+  };
   const [fileSearch, setFileSearch] = useState(false);
-  const terminal = workspaceTab === "terminal";
+  const terminalId = workspaceTab.startsWith("terminal:") ? workspaceTab.slice("terminal:".length) : "";
+  const terminal = !!terminalId;
+  useEffect(() => {
+    if (!loaded) return;
+    const activeIds = new Set(workspace.terminals.map((item) => `terminal:${item.id}`));
+    workspace.terminals.forEach((item) => pendingTerminalIds.current.delete(item.id));
+    setSeenWorkspaceTabs((seen) => {
+      const next = seen.filter((tab) => !tab.startsWith("terminal:") || activeIds.has(tab) || pendingTerminalIds.current.has(tab.slice("terminal:".length)));
+      if (next.length === seen.length) return seen;
+      localStorage.setItem("crabase-workspace-tabs", JSON.stringify(next));
+      return next;
+    });
+    if (workspaceTab.startsWith("terminal:") && !activeIds.has(workspaceTab) && !pendingTerminalIds.current.has(workspaceTab.slice("terminal:".length))) setWorkspaceTab("artifacts");
+  }, [loaded, workspace.terminals, workspaceTab]);
+  const restoreWorkspace = () => {
+    const last = lastWorkspaceTab.current;
+    if (last === "code" && !project) return selectWorkspace("artifacts");
+    if (last.startsWith("terminal:") && !workspace.terminals.some((item) => item.id === last.slice("terminal:".length))) return setWorkspace("artifacts");
+    if (last === "code" || last === "artifacts") return selectWorkspace(last);
+    setSeenWorkspaceTabs((seen) => {
+      if (seen.includes(last)) return seen;
+      const next = [...seen, last];
+      localStorage.setItem("crabase-workspace-tabs", JSON.stringify(next));
+      return next;
+    });
+    setWorkspaceTab(last);
+  };
+  const toggleTerminal = () => {
+    if (terminal) return setWorkspaceTab("");
+    const last = lastWorkspaceTab.current;
+    if (last.startsWith("terminal:") && workspace.terminals.some((item) => item.id === last.slice("terminal:".length))) setWorkspaceTab(last);
+    else void openTerminal();
+  };
   const [workspaceDock, setWorkspaceDock] = useState<"bottom" | "right">(
     () => (localStorage.getItem("crabase-workspace-dock") as "bottom" | "right") || (localStorage.getItem("crabase-terminal-dock") as "bottom" | "right") || "right",
   );
@@ -121,7 +178,7 @@ export function App() {
         !event.shiftKey && !event.altKey && !event.isComposing && project) {
         if (document.querySelector('dialog[open]:not(.file-palette)')) return;
         event.preventDefault();
-        setWorkspaceTab("code");
+        selectWorkspace("code");
         setFileSearch(true);
         document.querySelector<HTMLInputElement>('.file-palette input')?.focus();
       }
@@ -145,18 +202,18 @@ export function App() {
       }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "j" && selected) {
         event.preventDefault();
-        setWorkspace("terminal");
+        toggleTerminal();
       }
       if ((event.metaKey || event.ctrlKey) && event.key === "\\" && selected) {
         event.preventDefault();
         if (workspaceTab) setWorkspaceTab("");
-        else setWorkspace("artifacts");
+        else restoreWorkspace();
       }
       if (event.key === "Escape") setSidebar(false);
     };
     window.addEventListener("keydown", key, true);
     return () => window.removeEventListener("keydown", key, true);
-  }, [navigate, selected, project?.id, workspaceTab]);
+  }, [navigate, selected, project?.id, workspaceTab, terminal]);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(""), 2600);
@@ -269,18 +326,26 @@ export function App() {
     dock={workspaceDock}
     open={!!workspaceTab}
     seenTabs={seenWorkspaceTabs}
-    onTab={setWorkspace}
+    terminalTabs={workspace.terminals}
+    onTab={setWorkspaceTab}
     onSelectTab={selectWorkspace}
+    onAddTerminal={() => void openTerminal()}
     onRemoveTab={removeWorkspaceTab}
     onClose={() => setWorkspaceTab("")}
     onDock={toggleWorkspaceDock}
   >
-    {visibleWorkspaceTab === "code" && project && <CodePanel project={project} request={request} theme={preferences.theme}
-      fileSearch={fileSearch} closeFileSearch={() => setFileSearch(false)} open={code} close={() => setWorkspaceTab("")} embedded />}
-    {visibleWorkspaceTab === "artifacts" && <DetailsPanel artifacts={workspace.artifacts} messages={messages} project={project}
-      chatSelected={!!selected} loaded={loaded} open={details} close={() => setWorkspaceTab("")} embedded />}
-    {visibleWorkspaceTab === "terminal" && <TerminalPanel sessions={workspace.terminals} request={request} close={() => setWorkspaceTab("")}
-      fail={setError} theme={preferences.theme} open={terminal} />}
+    {project && <div className={`workspace-view ${visibleWorkspaceTab === "code" ? "active" : ""}`}>
+      <CodePanel project={project} request={request} theme={preferences.theme}
+        fileSearch={fileSearch} closeFileSearch={() => setFileSearch(false)} open={code && !!workspaceTab} close={() => setWorkspaceTab("")} embedded />
+    </div>}
+    <div className={`workspace-view ${visibleWorkspaceTab === "artifacts" ? "active" : ""}`}>
+      <DetailsPanel artifacts={workspace.artifacts} messages={messages} project={project}
+        chatSelected={!!selected} loaded={loaded} open={details && !!workspaceTab} close={() => setWorkspaceTab("")} embedded />
+    </div>
+    {workspace.terminals.map((session) => <div className={`workspace-view ${visibleWorkspaceTab === `terminal:${session.id}` ? "active" : ""}`} key={session.id}>
+      <TerminalPanel terminalId={session.id} sessions={workspace.terminals} request={request}
+        fail={setError} theme={preferences.theme} open={visibleWorkspaceTab === `terminal:${session.id}` && !!workspaceTab} />
+    </div>)}
   </WorkspacePanel>;
   if (route.page === "settings" || user.avatar_required) return <main className="settings-shell">
     <SettingsPage request={request} projects={data.projects} loaded={loaded} back={() => navigate('/')} {...preferences} />
@@ -327,7 +392,7 @@ export function App() {
           detailsOpen={details}
           toggleCode={() => setWorkspace("code")}
           codeOpen={code}
-          toggleTerminal={() => setWorkspace("terminal")}
+          toggleTerminal={toggleTerminal}
           terminalOpen={terminal}
           copy={() =>
             void navigator.clipboard
