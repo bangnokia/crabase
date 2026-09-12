@@ -110,8 +110,8 @@ export function SearchDialog({ chats, projects, avatars, commands = [], open, cl
       {search ? <IconButton className="search-clear" label="Clear search" onClick={() => { setSearch(""); inputRef.current?.focus(); }}><X size={16} /></IconButton> : <kbd>Esc</kbd>}
     </div>
     <div className="search-dialog-summary" aria-live="polite">
-      {results.length ? `${results.length} result${results.length === 1 ? "" : "s"}` : query ? "No matches" : "Recent chats"}
-      {results.length > 0 && <span><kbd>↑</kbd><kbd>↓</kbd> to move <kbd>Enter</kbd> to open</span>}
+      {totalResults ? `${totalResults} result${totalResults === 1 ? "" : "s"}` : query ? "No matches" : "Commands and projects"}
+      {totalResults > 0 && <span><kbd>↑</kbd><kbd>↓</kbd> to move <kbd>Enter</kbd> to run</span>}
     </div>
     <div id="search-result-list" className="search-results" role="listbox" aria-label="Search results">
       {filteredCommands.map((command, commandIndex) => <button key={command.id} id={`command-result-${command.id}`} role="option" aria-selected={selectedIndex === commandIndex} onMouseEnter={() => setSelectedIndex(commandIndex)} onClick={() => { command.run(); close(); }}>
