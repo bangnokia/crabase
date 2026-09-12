@@ -129,7 +129,7 @@ export function App() {
     { id: "code", label: "Open code editor", keywords: ["editor"], run: () => selectWorkspace("code") },
     { id: "settings", label: "Open settings", run: () => navigate('/settings') },
     { id: "sidebar", label: "Toggle left sidebar", run: toggleSidebar },
-    { id: "right-sidebar", label: "Toggle right sidebar", keywords: ["workspace", "panel"], run: () => setWorkspace(lastWorkspaceTab.current) },
+    { id: "right-sidebar", label: "Toggle right sidebar", keywords: ["workspace", "panel"], run: () => setWorkspace(lastWorkspaceTab.current === "code" || lastWorkspaceTab.current === "artifacts" ? lastWorkspaceTab.current : "artifacts") },
     { id: "archived", label: "Show or hide archived projects", keywords: ["archive"], run: () => window.dispatchEvent(new Event("crabase:toggle-archived")) },
   ];
   useEffect(() => {
@@ -444,6 +444,7 @@ export function App() {
                     decision,
                   })
                 }
+                onFileMention={(path) => { selectWorkspace("code"); window.dispatchEvent(new CustomEvent("crabase:reveal-file", { detail: path })); }}
               >
                 {composer}
               </ChatPage>

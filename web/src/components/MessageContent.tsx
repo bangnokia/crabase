@@ -5,7 +5,7 @@ import { Download } from "lucide-react";
 import { isArtifactUrl, isImageArtifact } from "../lib/artifacts";
 import { Dialog } from "./ui";
 
-export function MessageContent({ children }: { children: string }) {
+export function MessageContent({ children, onFileMention }: { children: string; onFileMention?: (path: string) => void }) {
   const [preview, setPreview] = useState<{ src: string; alt: string }>();
   return (
     <>
@@ -22,6 +22,7 @@ export function MessageContent({ children }: { children: string }) {
             </button>
           ) : null,
           a: ({ href, children }) =>
+            href?.startsWith("crabase-file:") ? <button type="button" className="file-mention-link" onClick={() => onFileMention?.(decodeURIComponent(href.slice(14)))}>{children}</button> :
             href && isArtifactUrl(href) ? (
               <span className="artifact-link">
                 {isImageArtifact(href) && typeof children === "string" && (
@@ -43,7 +44,7 @@ export function MessageContent({ children }: { children: string }) {
             ),
         }}
       >
-        {children}
+        {children.replace(/@([\w./-]+)/g, (_, path) => `[\@${path}](crabase-file:${encodeURIComponent(path)})`)}
       </Markdown>
       {preview && (
         <Dialog

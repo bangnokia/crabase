@@ -33,6 +33,11 @@ export function ProjectWorkspacePanel({ project, request, theme, actions, fileSe
   const splitRef = useRef<HTMLDivElement>(null);
   const dragStart = useRef({ x: 0, width: 280 });
   useEffect(() => localStorage.setItem("crabase-code-navigator-width", String(navigatorWidth)), [navigatorWidth]);
+  useEffect(() => {
+    const reveal = (event: Event) => setFileRequest({ path: (event as CustomEvent<string>).detail, token: Date.now() });
+    window.addEventListener("crabase:reveal-file", reveal);
+    return () => window.removeEventListener("crabase:reveal-file", reveal);
+  }, []);
 
   function resizeNavigator(width: number) {
     setNavigatorWidth(clampPanelWidth(width, 200, 500, splitRef.current?.clientWidth || 700));

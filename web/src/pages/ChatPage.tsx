@@ -11,10 +11,12 @@ const MessageItem = memo(function MessageItem({
   message,
   agentName,
   avatars,
+  onFileMention,
 }: {
   message: Message;
   agentName: string;
   avatars: Avatars;
+  onFileMention?: (path: string) => void;
 }) {
   const human = message.role === "user" || message.role === "note";
   if (message.role === "tool")
@@ -49,7 +51,7 @@ const MessageItem = memo(function MessageItem({
       </div>
       <div className="message-body">
         <AttachmentList files={message.attachments || []} />
-        {(message.body || !message.attachments?.length) && <MessageContent>
+        {(message.body || !message.attachments?.length) && <MessageContent onFileMention={onFileMention}>
           {(message.role === "guide"
             ? message.body.replaceAll("Codex", agentName)
             : message.body) || "…"}
@@ -76,6 +78,7 @@ export function ChatPage({
   agentName,
   avatars,
   decide,
+  onFileMention,
   children,
 }: {
   chat?: Chat;
@@ -85,6 +88,7 @@ export function ChatPage({
   agentName: string;
   avatars: Avatars;
   decide: (id: number, decision: "accept" | "decline") => void;
+  onFileMention?: (path: string) => void;
   children: ReactNode;
 }) {
   const messageGroups = useMemo(() => groupConversationMessages(messages), [messages]);
@@ -136,7 +140,7 @@ export function ChatPage({
             return (
               <div className={`message-group ${human ? "human" : "agent"}`} key={first.id}>
                 {group.map((message) => (
-                  <MessageItem key={message.id} {...{ message, agentName, avatars }} />
+                  <MessageItem key={message.id} {...{ message, agentName, avatars, onFileMention }} />
                 ))}
                 <time className="message-time" dateTime={last.created_at}>
                   {time(last.created_at)}
