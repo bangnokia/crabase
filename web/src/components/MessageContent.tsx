@@ -22,7 +22,7 @@ export function MessageContent({ children, onFileMention }: { children: string; 
             </button>
           ) : null,
           a: ({ href, children }) =>
-            href?.startsWith("crabase-file:") ? <button type="button" className="file-mention-link" onClick={(event) => { event.preventDefault(); event.stopPropagation(); onFileMention?.(decodeURIComponent(href.slice(14))); }}>{children}</button> :
+            href?.startsWith("#crabase-file:") ? <button type="button" className="file-mention-link" onClick={(event) => { event.preventDefault(); event.stopPropagation(); onFileMention?.(decodeURIComponent(href.slice(15))); }}>{children}</button> :
             href && isArtifactUrl(href) ? (
               <span className="artifact-link">
                 {isImageArtifact(href) && typeof children === "string" && (
@@ -44,7 +44,7 @@ export function MessageContent({ children, onFileMention }: { children: string; 
             ),
         }}
       >
-        {children.replace(/@([\w./-]+)/g, (_, path) => `[@${path}](crabase-file:${encodeURIComponent(path)})`)}
+        {children.replace(/@([\w./-]+)/g, (_, path) => `[@${path}](#crabase-file:${encodeURIComponent(path)})`)}
       </Markdown>
       {preview && (
         <Dialog
