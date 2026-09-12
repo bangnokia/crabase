@@ -39,23 +39,27 @@ export function SearchDialog({ chats, projects, avatars, commands = [], open, cl
       .map(({ chat }) => chat);
   }, [chats, projects, search, commands]);
 
+  const query = search.trim();
+  const filteredCommands = commands.filter((command) => !query || [command.label, ...(command.keywords || [])].join(" ").toLowerCase().includes(query.toLowerCase()));
+  const totalResults = filteredCommands.length + results.length;
+
   useEffect(() => {
     setSelectedIndex(0);
   }, [search]);
 
   useEffect(() => {
-    setSelectedIndex((index) => Math.min(index, Math.max(0, results.length - 1)));
-  }, [results.length]);
+    setSelectedIndex((index) => Math.min(index, Math.max(0, totalResults - 1)));
+  }, [totalResults]);
 
   useEffect(() => {
-    const selected = results[selectedIndex];
-    if (!selected) return;
-    document.getElementById(`search-result-${selected.id}`)?.scrollIntoView({ block: "nearest" });
-  }, [results, selectedIndex]);
-
-  const query = search.trim();
+    const selected = selectedIndex < filteredCommands.length
+      ? document.getElementById(`command-result-${filteredCommands[selectedIndex]?.id}`)
+      : document.getElementById(`search-result-${results[selectedIndex - filteredCommands.length]?.id}`);
+    selected?.scrollIntoView({ block: "nearest" });
+  }, [filteredCommands, results, selectedIndex]);
   const selectResult = (index: number) => {
-    const chat = results[index];
+    if (index < filteredCommands.length) { filteredCommands[index]?.run(); close(); return; }
+    const chat = results[index - filteredCommands.length];
     if (chat) open(chat.id);
   };
 
@@ -69,29 +73,31 @@ export function SearchDialog({ chats, projects, avatars, commands = [], open, cl
         aria-label="Search chats and projects"
         aria-controls="search-result-list"
         aria-expanded="true"
-        aria-activedescendant={results[selectedIndex] ? `search-result-${results[selectedIndex].id}` : undefined}
+        aria-activedescendant={selectedIndex < filteredCommands.length
+          ? (filteredCommands[selectedIndex] ? `command-result-${filteredCommands[selectedIndex].id}` : undefined)
+          : (results[selectedIndex - filteredCommands.length] ? `search-result-${results[selectedIndex - filteredCommands.length].id}` : undefined)}
         placeholder="Search chats and projects…"
         value={search}
         onChange={(event) => setSearch(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === "ArrowDown") {
             event.preventDefault();
-            setSelectedIndex((index) => results.length ? (index + 1) % results.length : 0);
+            setSelectedIndex((index) => totalResults ? (index + 1) % totalResults : 0);
           } else if (event.key === "ArrowUp") {
             event.preventDefault();
-            setSelectedIndex((index) => results.length ? (index - 1 + results.length) % results.length : 0);
+            setSelectedIndex((index) => totalResults ? (index - 1 + totalResults) % totalResults : 0);
           } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "n") {
             event.preventDefault();
-            setSelectedIndex((index) => results.length ? (index + 1) % results.length : 0);
+            setSelectedIndex((index) => totalResults ? (index + 1) % totalResults : 0);
           } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "p") {
             event.preventDefault();
-            setSelectedIndex((index) => results.length ? (index - 1 + results.length) % results.length : 0);
-          } else if (event.key === "Home" && results.length) {
+            setSelectedIndex((index) => totalResults ? (index - 1 + totalResults) % totalResults : 0);
+          } else if (event.key === "Home" && totalResults) {
             event.preventDefault();
             setSelectedIndex(0);
-          } else if (event.key === "End" && results.length) {
+          } else if (event.key === "End" && totalResults) {
             event.preventDefault();
-            setSelectedIndex(results.length - 1);
+            setSelectedIndex(totalResults - 1);
           } else if (event.key === "Enter") {
             event.preventDefault();
             selectResult(selectedIndex);
@@ -108,24 +114,24 @@ export function SearchDialog({ chats, projects, avatars, commands = [], open, cl
       {results.length > 0 && <span><kbd>↑</kbd><kbd>↓</kbd> to move <kbd>Enter</kbd> to open</span>}
     </div>
     <div id="search-result-list" className="search-results" role="listbox" aria-label="Search results">
-      {commands.filter((command) => !query || [command.label, ...(command.keywords || [])].join(" ").toLowerCase().includes(query)).map((command) => <button key={command.id} role="option" onClick={() => { command.run(); close(); }}>
+      {filteredCommands.map((command, commandIndex) => <button key={command.id} id={`command-result-${command.id}`} role="option" aria-selected={selectedIndex === commandIndex} onMouseEnter={() => setSelectedIndex(commandIndex)} onClick={() => { command.run(); close(); }}>
         <span className="search-result-copy"><strong>{command.label}</strong><small>{command.shortcut || "Command"}</small></span>
       </button>)}
       {results.map((chat, index) => <button
         key={chat.id}
         id={`search-result-${chat.id}`}
         role="option"
-        aria-selected={selectedIndex === index}
-        onMouseEnter={() => setSelectedIndex(index)}
+        aria-selected={selectedIndex === filteredCommands.length + index}
+        onMouseEnter={() => setSelectedIndex(filteredCommands.length + index)}
         onClick={() => selectResult(index)}
       >
         <AvatarStack users={chat.participants} avatars={avatars} />
         <span className="search-result-copy">
           <strong><HighlightedText text={chat.project_name || ""} query={query} /></strong>
         </span>
-        {selectedIndex === index && <span className="search-result-enter" aria-hidden="true">↵</span>}
+        {selectedIndex === filteredCommands.length + index && <span className="search-result-enter" aria-hidden="true">↵</span>}
       </button>)}
-      {!results.length && <div className="search-empty" role="status">
+      {!totalResults && <div className="search-empty" role="status">
         <Search size={18} aria-hidden="true" />
         <span>{query ? "No chats or projects match that search." : "No chats yet."}</span>
       </div>}
