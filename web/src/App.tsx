@@ -20,6 +20,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { NewChatPage } from "./pages/NewChatPage";
 import { ChatPage } from "./pages/ChatPage";
 import { WorkspacePanel, type WorkspaceTab, type WorkspaceTabId } from "./components/WorkspacePanel";
+import type { Command } from "./lib/commands";
 export function App() {
   const { user } = useAuth();
   const { route, navigate } = useRoute();
@@ -112,6 +113,15 @@ export function App() {
   const [fileSearch, setFileSearch] = useState(false);
   const terminalId = workspaceTab.startsWith("terminal:") ? workspaceTab.slice("terminal:".length) : "";
   const terminal = !!terminalId;
+  const commands: Command[] = [
+    { id: "new-chat", label: "New chat", shortcut: "⌘N", run: () => newChat() },
+    { id: "new-project", label: "Open project", keywords: ["project"], run: () => setDialog("project") },
+    { id: "terminal", label: "Open terminal", keywords: ["shell"], run: () => void openTerminal() },
+    { id: "code", label: "Open code editor", keywords: ["editor"], run: () => selectWorkspace("code") },
+    { id: "settings", label: "Open settings", run: () => setDialog("settings") },
+    { id: "sidebar", label: "Toggle left sidebar", run: () => setSidebarHidden((hidden) => !hidden) },
+    { id: "archived", label: "Show or hide archived projects", keywords: ["archive"], run: () => window.dispatchEvent(new Event("crabase:toggle-archived")) },
+  ];
   useEffect(() => {
     if (!loaded) return;
     const activeIds = new Set(workspace.terminals.map((item) => `terminal:${item.id}`));
@@ -448,6 +458,8 @@ export function App() {
       {dialog === "search" && (
         <SearchDialog
           chats={data.chats}
+          projects={data.projects}
+          commands={commands}
           avatars={preferences.avatars}
           open={open}
           close={() => setDialog("")}

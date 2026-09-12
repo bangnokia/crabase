@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import {
   ArrowUp,
   Folder,
@@ -8,12 +8,14 @@ import {
   Square,
   StickyNote,
 } from "lucide-react";
-import type { Chat, Project, Request, Snapshot } from "../types";
+import type { Chat, Project, ProjectWorkspace, Request, Snapshot } from "../types";
 import { IconButton, ErrorNotice } from "./ui";
 import { AttachmentList } from './AttachmentList';
 import { ModelPicker } from './ModelPicker';
 import { reasoningLevels } from '../lib/models';
 import { useAttachments } from '../hooks/useAttachments';
+import { searchFiles } from '../lib/file-search';
+import { fileSearchDirection } from '../lib/shortcuts';
 export type SendOptions = {
   mode: "agent" | "note";
   model?: string;
@@ -67,6 +69,12 @@ export function Composer({
   const [branchError, setBranchError] = useState(false);
   const [contextVersion, setContextVersion] = useState(0);
   const [modelError, setModelError] = useState("");
+  const [filePaths, setFilePaths] = useState<readonly string[]>([]);
+  const [filePathsProject, setFilePathsProject] = useState("");
+  const [filePathsLoading, setFilePathsLoading] = useState(false);
+  const [filePathsError, setFilePathsError] = useState("");
+  const [fileMention, setFileMention] = useState<{ start: number; end: number; query: string } | null>(null);
+  const [fileMentionSelection, setFileMentionSelection] = useState(0);
   const chosen =
     data.models.find((item) => item.model === model) ||
     data.models.find((item) => item.isDefault) ||
@@ -76,6 +84,11 @@ export function Composer({
     ? effort
     : levels.find(item => item.reasoningEffort === chosen?.defaultReasoningEffort)?.reasoningEffort || levels[0]?.reasoningEffort || "";
   const disabled = (!draft.trim() && !attachments.files.length) || !attachments.ready || busy || !loaded || !live;
+  const fileMentionResults = useMemo(
+    () => fileMention ? searchFiles(filePaths, fileMention.query) : [],
+    [filePaths, fileMention],
+  );
+  const activeFileMention = Math.min(fileMentionSelection, Math.max(0, fileMentionResults.length - 1));
   useEffect(() => {
     if (chosen) sessionStorage.setItem("crabase.model", chosen.model);
     sessionStorage.setItem("crabase.effort", reasoning);
@@ -91,6 +104,43 @@ export function Composer({
   useEffect(() => {
     setContext(null);
   }, [project?.id, project?.path, live]);
+  useEffect(() => {
+    setFileMention(null);
+    setFilePaths([]);
+    setFilePathsProject("");
+    setFilePathsError("");
+  }, [project?.id]);
+  useEffect(() => {
+    const projectId = project?.id;
+    if (!fileMention || !projectId || !live || filePathsProject === projectId || filePathsLoading) return;
+    let stale = false;
+    setFilePathsLoading(true);
+    setFilePathsError("");
+    request<ProjectWorkspace>("projectWorkspace", { project_id: projectId })
+      .then((workspace) => {
+        if (stale) return;
+        setFilePaths(workspace.paths);
+        setFilePathsProject(projectId);
+      })
+      .catch((error) => {
+        if (!stale) {
+          setFilePathsError((error as Error).message);
+          setFilePathsProject(projectId);
+        }
+      })
+      .finally(() => {
+        if (!stale) setFilePathsLoading(false);
+      });
+    return () => { stale = true; };
+  }, [fileMention, project?.id, live, filePathsProject, filePathsLoading, request]);
+  useEffect(() => {
+    setFileMentionSelection(0);
+  }, [fileMention?.query]);
+  useEffect(() => {
+    const selected = fileMentionResults[activeFileMention];
+    if (!selected) return;
+    document.getElementById(`file-mention-${activeFileMention}`)?.scrollIntoView({ block: "nearest" });
+  }, [activeFileMention, fileMentionResults]);
   useEffect(() => {
     setBranchError(false);
     if (!project || !live) return;
@@ -120,6 +170,42 @@ export function Composer({
         ? { mode, attachments: attachments.ids() }
         : { mode, model: chosen.model, effort: reasoning || null, attachments: attachments.ids() },
     ).then((sent) => { if (sent) attachments.clear(); textarea.current?.focus(); });
+  }
+  function updateFileMention(value: string, caret: number | null) {
+    if (!project || !live || caret === null) {
+      setFileMention(null);
+      return;
+    }
+    const beforeCaret = value.slice(0, caret);
+    const at = beforeCaret.lastIndexOf("@");
+    if (at < 0 || (at > 0 && /[\w@]/.test(beforeCaret[at - 1]))) {
+      setFileMention(null);
+      return;
+    }
+    const query = beforeCaret.slice(at + 1);
+    if (/[\s\n\r]/.test(query)) {
+      setFileMention(null);
+      return;
+    }
+    setFileMention({ start: at, end: caret, query });
+  }
+  function chooseFileMention(path: string) {
+    if (!fileMention) return;
+    const value = draftRef.current;
+    const insertion = `@${path} `;
+    const next = value.slice(0, fileMention.start) + insertion + value.slice(fileMention.end);
+    const caret = fileMention.start + insertion.length;
+    draftRef.current = next;
+    setDraft(next);
+    setFileMention(null);
+    requestAnimationFrame(() => {
+      textarea.current?.focus();
+      textarea.current?.setSelectionRange(caret, caret);
+    });
+  }
+  function retryFilePaths() {
+    setFilePathsProject("");
+    setFilePathsError("");
   }
   return (
     <div className={`composer-wrap ${chat ? "in-chat" : ""}`}>
@@ -155,6 +241,10 @@ export function Composer({
           <textarea
             ref={textarea}
             aria-label={`Message ${data.agentName}`}
+            aria-autocomplete="list"
+            aria-expanded={!!fileMention}
+            aria-controls={fileMention ? "file-mention-list" : undefined}
+            aria-activedescendant={fileMention && fileMentionResults.length ? `file-mention-${activeFileMention}` : undefined}
             placeholder={`Message ${data.agentName}…`}
             rows={2}
             value={draft}
@@ -162,8 +252,36 @@ export function Composer({
             onChange={(event) => {
               draftRef.current = event.target.value;
               setDraft(event.target.value);
+              updateFileMention(event.target.value, event.target.selectionStart);
+            }}
+            onClick={(event) => updateFileMention(event.currentTarget.value, event.currentTarget.selectionStart)}
+            onKeyUp={(event) => {
+              if (["Enter", "Tab", "Escape", "ArrowDown", "ArrowUp"].includes(event.key)) return;
+              updateFileMention(event.currentTarget.value, event.currentTarget.selectionStart);
             }}
             onKeyDown={(event) => {
+              if (fileMention) {
+                const direction = fileSearchDirection(event.nativeEvent);
+                if (direction) {
+                  event.preventDefault();
+                  if (fileMentionResults.length) setFileMentionSelection((selection) => (selection + direction + fileMentionResults.length) % fileMentionResults.length);
+                  return;
+                }
+                if (!event.shiftKey && (event.key === "Enter" || event.key === "Tab") && fileMentionResults[activeFileMention]) {
+                  event.preventDefault();
+                  chooseFileMention(fileMentionResults[activeFileMention]);
+                  return;
+                }
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  setFileMention(null);
+                  return;
+                }
+                if (event.key === "Enter" && !event.shiftKey && filePathsLoading) {
+                  event.preventDefault();
+                  return;
+                }
+              }
               if (
                 event.key === "Enter" &&
                 !event.shiftKey &&
@@ -173,7 +291,42 @@ export function Composer({
                 submit("agent");
               }
             }}
+            onBlur={(event) => {
+              const target = event.relatedTarget as HTMLElement | null;
+              if (!target?.closest(".file-mention-menu")) setFileMention(null);
+            }}
           />
+          {fileMention && (
+            <div id="file-mention-list" className="file-mention-menu" role="listbox" aria-label="Mention a project file">
+              {fileMentionResults.map((path, index) => (
+                <button
+                  key={path}
+                  id={`file-mention-${index}`}
+                  type="button"
+                  role="option"
+                  aria-selected={index === activeFileMention}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onMouseEnter={() => setFileMentionSelection(index)}
+                  onClick={() => chooseFileMention(path)}
+                  title={path}
+                >
+                  <span className="file-mention-icon" aria-hidden="true">@</span>
+                  <span className="truncate">{path}</span>
+                </button>
+              ))}
+              {!fileMentionResults.length && (filePathsError ? (
+                <div className="file-mention-status" role="status">
+                  <span>{filePathsError}</span>
+                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={retryFilePaths}>Retry</button>
+                </div>
+              ) : (
+                <p className="file-mention-status" role="status">
+                  {filePathsLoading ? "Loading project files…" : "No matching files."}
+                </p>
+              ))}
+              {fileMentionResults.length > 0 && <span className="file-mention-hint"><kbd>↑</kbd><kbd>↓</kbd> to move <kbd>Enter</kbd> to mention</span>}
+            </div>
+          )}
           <div className="composer-controls">
             <div className="model-controls">
               <input ref={picker} type="file" multiple hidden onChange={event => { attachments.add(Array.from(event.target.files || [])); event.target.value = ''; }} />

@@ -129,6 +129,11 @@ export function Sidebar({
   createWorktree,
 }: Props) {
   const [showArchived, setShowArchived] = useState(false);
+  useEffect(() => {
+    const toggle = () => setShowArchived((value) => !value);
+    window.addEventListener("crabase:toggle-archived", toggle);
+    return () => window.removeEventListener("crabase:toggle-archived", toggle);
+  }, []);
   const [width, setWidth] = useState(232);
   const [showAll, setShowAll] = useState<string[]>([]);
   const [projectSort, setProjectSort] = useState<ProjectSort>("created");
@@ -313,7 +318,7 @@ export function Sidebar({
             <Avatar user={name} avatars={avatars} />
             <span className="truncate" title={name}>{name}</span>
           </button>
-          <IconButton label="Search chats" onClick={() => showDialog("search")}>
+          <IconButton label="Search chats and projects (⌘/Ctrl+K)" onClick={() => showDialog("search")}>
             <Search size={17} />
           </IconButton>
           <IconButton label="Settings" onClick={() => showDialog("settings")}>
