@@ -73,6 +73,7 @@ export function Composer({
   const [filePathsProject, setFilePathsProject] = useState("");
   const [filePathsLoading, setFilePathsLoading] = useState(false);
   const [filePathsError, setFilePathsError] = useState("");
+  const filePathsLoadingRef = useRef(false);
   const [fileMention, setFileMention] = useState<{ start: number; end: number; query: string } | null>(null);
   const [fileMentionSelection, setFileMentionSelection] = useState(0);
   const chosen =
@@ -112,27 +113,24 @@ export function Composer({
   }, [project?.id]);
   useEffect(() => {
     const projectId = project?.id;
-    if (!fileMention || !projectId || !live || filePathsProject === projectId || filePathsLoading) return;
-    let stale = false;
+    if (!fileMention || !projectId || !live || filePathsProject === projectId || filePathsLoadingRef.current) return;
+    filePathsLoadingRef.current = true;
     setFilePathsLoading(true);
     setFilePathsError("");
     request<ProjectWorkspace>("projectWorkspace", { project_id: projectId })
       .then((workspace) => {
-        if (stale) return;
         setFilePaths(workspace.paths);
         setFilePathsProject(projectId);
       })
       .catch((error) => {
-        if (!stale) {
-          setFilePathsError((error as Error).message);
-          setFilePathsProject(projectId);
-        }
+        setFilePathsError((error as Error).message);
+        setFilePathsProject(projectId);
       })
       .finally(() => {
-        if (!stale) setFilePathsLoading(false);
+        filePathsLoadingRef.current = false;
+        setFilePathsLoading(false);
       });
-    return () => { stale = true; };
-  }, [fileMention, project?.id, live, filePathsProject, filePathsLoading, request]);
+  }, [fileMention, project?.id, live, filePathsProject, request]);
   useEffect(() => {
     setFileMentionSelection(0);
   }, [fileMention?.query]);

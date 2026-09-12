@@ -1,4 +1,4 @@
-function matchScore(text: string, query: string) {
+export function matchScore(text: string, query: string) {
   const contiguous = text.indexOf(query);
   if (contiguous >= 0) return contiguous;
   let position = -1;

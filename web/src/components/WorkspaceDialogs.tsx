@@ -4,6 +4,7 @@ import type { Avatars, Chat, Project } from "../types";
 import { AvatarStack } from "./Avatar";
 import { Dialog, IconButton } from "./ui";
 import type { Command } from "../lib/commands";
+import { fuzzyScore } from "../lib/commands";
 
 function HighlightedText({ text, query }: { text: string; query: string }) {
   if (!query) return <>{text}</>;
@@ -25,12 +26,8 @@ export function SearchDialog({ chats, projects, avatars, commands = [], open, cl
     const query = search.trim().toLowerCase();
     return projects.filter((project) => !project.archived).map((project, index) => {
         const title = project.name.toLowerCase();
-        const matches = !query || title.includes(query);
-        if (!matches) return null;
-        const score = !query ? 0
-          : title === query ? 0
-            : title.startsWith(query) ? 1
-              : 2;
+        const score = fuzzyScore(title, query);
+        if (score === null) return null;
         const chat = chats.find((item) => item.project_id === project.id && !item.archived);
         return chat ? { chat, index, score } : null;
       })
@@ -40,7 +37,7 @@ export function SearchDialog({ chats, projects, avatars, commands = [], open, cl
   }, [chats, projects, search, commands]);
 
   const query = search.trim();
-  const filteredCommands = commands.filter((command) => !query || [command.label, ...(command.keywords || [])].join(" ").toLowerCase().includes(query.toLowerCase()));
+  const filteredCommands = commands.filter((command) => fuzzyScore([command.label, ...(command.keywords || [])].join(" "), query) !== null);
   const totalResults = filteredCommands.length + results.length;
 
   useEffect(() => {
