@@ -113,13 +113,22 @@ export function App() {
   const [fileSearch, setFileSearch] = useState(false);
   const terminalId = workspaceTab.startsWith("terminal:") ? workspaceTab.slice("terminal:".length) : "";
   const terminal = !!terminalId;
+  const toggleSidebar = () => {
+    if (window.innerWidth <= 760) {
+      setSidebarHidden(false);
+      setSidebar((visible) => !visible);
+    } else {
+      setSidebar(false);
+      setSidebarHidden((hidden) => !hidden);
+    }
+  };
   const commands: Command[] = [
     { id: "new-chat", label: "New chat", shortcut: "⌘N", run: () => newChat() },
     { id: "new-project", label: "Open project", keywords: ["project"], run: () => setDialog("project") },
     { id: "terminal", label: "Open terminal", keywords: ["shell"], run: () => void openTerminal() },
     { id: "code", label: "Open code editor", keywords: ["editor"], run: () => selectWorkspace("code") },
     { id: "settings", label: "Open settings", run: () => navigate('/settings') },
-    { id: "sidebar", label: "Toggle left sidebar", run: () => setSidebarHidden((hidden) => !hidden) },
+    { id: "sidebar", label: "Toggle left sidebar", run: toggleSidebar },
     { id: "archived", label: "Show or hide archived projects", keywords: ["archive"], run: () => window.dispatchEvent(new Event("crabase:toggle-archived")) },
   ];
   useEffect(() => {
@@ -206,13 +215,7 @@ export function App() {
       }
       if (isSidebarShortcut(event)) {
         event.preventDefault();
-        if (window.innerWidth <= 760) {
-          setSidebarHidden(false);
-          setSidebar((visible) => !visible);
-        } else {
-          setSidebar(false);
-          setSidebarHidden((hidden) => !hidden);
-        }
+        commands.find((command) => command.id === "sidebar")?.run();
       }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "j" && selected) {
         event.preventDefault();
