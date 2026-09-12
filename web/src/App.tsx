@@ -118,7 +118,7 @@ export function App() {
     { id: "new-project", label: "Open project", keywords: ["project"], run: () => setDialog("project") },
     { id: "terminal", label: "Open terminal", keywords: ["shell"], run: () => void openTerminal() },
     { id: "code", label: "Open code editor", keywords: ["editor"], run: () => selectWorkspace("code") },
-    { id: "settings", label: "Open settings", run: () => setDialog("settings") },
+    { id: "settings", label: "Open settings", run: () => navigate('/settings') },
     { id: "sidebar", label: "Toggle left sidebar", run: () => setSidebarHidden((hidden) => !hidden) },
     { id: "archived", label: "Show or hide archived projects", keywords: ["archive"], run: () => window.dispatchEvent(new Event("crabase:toggle-archived")) },
   ];
@@ -202,7 +202,7 @@ export function App() {
       }
       if ((event.metaKey || event.ctrlKey) && event.key === "n") {
         event.preventDefault();
-        newChat();
+        commands.find((command) => command.id === "new-chat")?.run();
       }
       if (isSidebarShortcut(event)) {
         event.preventDefault();
