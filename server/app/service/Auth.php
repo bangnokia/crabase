@@ -34,6 +34,7 @@ final class Auth
     }
     public static function allowedHost(string $host): bool
     {
+        if (in_array($host, ['cb.dev.tda', 'c.tdagroup.co'], true)) return true;
         if (in_array($host, ['localhost', '127.0.0.1'], true)) return true;
         if (!filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) return false;
         foreach (explode(',', getenv('CRABASE_ALLOWED_HOSTS') ?: '') as $network) {
