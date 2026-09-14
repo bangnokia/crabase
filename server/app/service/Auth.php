@@ -27,6 +27,7 @@ final class Auth
     }
     public static function allowedOrigin(?string $origin): bool
     {
+        if (getenv('CRABASE_ALLOW_ALL_ORIGINS') === '1') return true;
         if (!is_string($origin) || !preg_match('~^https?://([^/:]+)(?::(5173|8787))?$~D', $origin, $match)) return false;
         if (in_array($match[1], ['cb.dev.tda', 'c.tdagroup.co'], true)) return true;
         return self::allowedHost($match[1]);
