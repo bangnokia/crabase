@@ -10,9 +10,12 @@ services:
       CRABASE_DB: /app/server/runtime/crabase.sqlite
       CRABASE_WORKSPACE_ROOT: /workspace
       CRABASE_ALLOW_ALL_ORIGINS: "1"
+      CODEX_BIN: /usr/local/bin/codex
     volumes:
       - crabase_runtime:/app/server/runtime
       - ${CRABASE_HOST_WORKSPACE:-.}:/workspace:rw
+      - /home/crab/.local/bin/codex:/usr/local/bin/codex:ro
+      - /home/crab/.codex:/root/.codex:ro
     healthcheck:
       test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1:8787/') === false ? 1 : 0);"]
       interval: 30s
