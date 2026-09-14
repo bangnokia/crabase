@@ -3,7 +3,7 @@ WORKDIR /src
 COPY package*.json ./
 RUN npm ci
 COPY web ./web
-COPY index.html vite.config.ts tsconfig.json ./
+COPY vite.config.ts tsconfig.json ./
 RUN npm run build
 
 FROM php:8.3-cli-bookworm
