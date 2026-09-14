@@ -1675,7 +1675,7 @@ small {
 }
 .workspace-code {
   flex: 1;
-  min-width: 0;
+  min-width: 520px;
   min-height: 0;
   overflow: auto;
   border: 0;
@@ -1695,6 +1695,9 @@ small {
   --diffs-gap-block: var(--space-2);
   --diffs-editor-line-highlight-border: var(--line);
   --diffs-editor-selection-bg: var(--terminal-selection);
+}
+@media (max-width: 760px) {
+  .workspace-code { min-width: 0; }
 }
 .workspace-code > * {
   min-width: 100%;

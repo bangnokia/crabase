@@ -21,6 +21,7 @@ export function ProjectWorkspacePanel({ project, request, theme, actions, fileSe
 }) {
   const [workspace, setWorkspace] = useState<ProjectWorkspace>();
   const [fileRequest, setFileRequest] = useState<{ path: string; token: number }>();
+  const pendingReveal = useRef<string>();
   const [files, setFiles] = useState<OpenFile[]>([]);
   const [activePath, setActivePath] = useState("");
   const [selectedChange, setSelectedChange] = useState<WorkspaceChange>();
@@ -34,10 +35,21 @@ export function ProjectWorkspacePanel({ project, request, theme, actions, fileSe
   const dragStart = useRef({ x: 0, width: 280 });
   useEffect(() => localStorage.setItem("crabase-code-navigator-width", String(navigatorWidth)), [navigatorWidth]);
   useEffect(() => {
-    const reveal = (event: Event) => setFileRequest({ path: (event as CustomEvent<string>).detail, token: Date.now() });
+    const reveal = (event: Event) => {
+      const path = (event as CustomEvent<string>).detail;
+      if (workspace) setFileRequest({ path, token: Date.now() });
+      else pendingReveal.current = path;
+    };
     window.addEventListener("crabase:reveal-file", reveal);
     return () => window.removeEventListener("crabase:reveal-file", reveal);
-  }, []);
+  }, [workspace]);
+  useEffect(() => {
+    if (workspace && pendingReveal.current) {
+      const path = pendingReveal.current;
+      pendingReveal.current = undefined;
+      setFileRequest({ path, token: Date.now() });
+    }
+  }, [workspace]);
 
   function resizeNavigator(width: number) {
     setNavigatorWidth(clampPanelWidth(width, 200, 500, splitRef.current?.clientWidth || 700));

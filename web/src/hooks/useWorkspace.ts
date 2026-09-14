@@ -20,6 +20,7 @@ export function useWorkspace(selected: string) {
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [terminals, setTerminals] = useState<TerminalSession[]>([]);
   const [error, setError] = useState("");
+  const threadCache = useRef(new Map<string, { messages: Message[]; approvals: Approval[]; artifacts: Artifact[]; terminals: TerminalSession[] }>());
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
   const socketRef = useRef<WebSocket | null>(null);
@@ -170,11 +171,12 @@ export function useWorkspace(selected: string) {
     };
   }, []);
   useEffect(() => {
-    setMessages([]);
-    setApprovals([]);
-    setArtifacts([]);
-    setTerminals([]);
-    setLoaded(false);
+    const cached = selected ? threadCache.current.get(selected) : undefined;
+    setMessages(cached?.messages || []);
+    setApprovals(cached?.approvals || []);
+    setArtifacts(cached?.artifacts || []);
+    setTerminals(cached?.terminals || []);
+    setLoaded(!!cached);
     if (!live) return;
     const id = selected;
     let stale = false;
@@ -195,6 +197,7 @@ export function useWorkspace(selected: string) {
         setMessages(result.thread?.messages || []);
         setApprovals(result.thread?.approvals || []);
         setTerminals(result.terminals || []);
+        if (id) threadCache.current.set(id, { messages: result.thread?.messages || [], approvals: result.thread?.approvals || [], artifacts: result.thread?.artifacts || [], terminals: result.terminals || [] });
       })
       .catch(async (error) => {
         if (stale) return;
