@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends git unzip libsq
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 WORKDIR /app
 COPY server/composer.json server/composer.lock ./server/
-RUN mkdir -p server/config && touch server/config/database.php
+RUN mkdir -p server/config && printf '%s\n' '<?php' > server/config/database.php
 RUN cd server && composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
 COPY . .
 COPY --from=frontend /src/server/public ./server/public
