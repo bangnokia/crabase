@@ -1,0 +1,22 @@
+services:
+  crabase:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8787:8787"
+      - "127.0.0.1:8788:8788"
+    env_file: .env
+    environment:
+      CRABASE_DB: /app/server/runtime/crabase.sqlite
+      CRABASE_WORKSPACE_ROOT: /workspace
+    volumes:
+      - crabase_runtime:/app/server/runtime
+      - ${CRABASE_HOST_WORKSPACE:-.}:/workspace:rw
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1:8787/') === false ? 1 : 0);"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  crabase_runtime:
