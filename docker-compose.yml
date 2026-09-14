@@ -11,6 +11,7 @@ services:
       CRABASE_WORKSPACE_ROOT: /workspace
       CRABASE_ALLOW_ALL_ORIGINS: "1"
       CODEX_BIN: /usr/local/bin/codex
+      NODE_BIN: /usr/bin/nodejs
     volumes:
       - crabase_runtime:/app/server/runtime
       - ${CRABASE_HOST_WORKSPACE:-.}:/workspace:rw
