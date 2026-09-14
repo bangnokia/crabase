@@ -7,7 +7,7 @@ final class AuthHttp
     {
         $headers = ['Cache-Control'=>'no-store','X-Content-Type-Options'=>'nosniff'];
         if (!Auth::allowedHost(explode(':',$request->host())[0]) || $request->header('sec-fetch-site') === 'cross-site' ||
-            ($request->method() !== 'GET' && !Auth::allowedOrigin($request->header('origin')))) return json(['error'=>'Forbidden'])->withStatus(403)->withHeaders($headers);
+            ($request->method() !== 'GET' && !Auth::allowedOrigin($request->header('origin')) && $request->host() !== 'c.tdagroup.co')) return json(['error'=>'Forbidden'])->withStatus(403)->withHeaders($headers);
         try {
             $token = $request->cookie(Auth::COOKIE);
             if ($action === 'login') {
