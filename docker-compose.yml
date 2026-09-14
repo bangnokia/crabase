@@ -15,7 +15,7 @@ services:
       - crabase_runtime:/app/server/runtime
       - ${CRABASE_HOST_WORKSPACE:-.}:/workspace:rw
       - /home/crab/.local/bin/codex:/usr/local/bin/codex:ro
-      - /home/crab/.codex:/root/.codex:ro
+      - /home/crab/.codex:/root/.codex:rw
     healthcheck:
       test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1:8787/') === false ? 1 : 0);"]
       interval: 30s
