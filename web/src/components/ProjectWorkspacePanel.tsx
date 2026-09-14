@@ -21,7 +21,7 @@ export function ProjectWorkspacePanel({ project, request, theme, actions, fileSe
 }) {
   const [workspace, setWorkspace] = useState<ProjectWorkspace>();
   const [fileRequest, setFileRequest] = useState<{ path: string; token: number }>();
-  const pendingReveal = useRef<string>();
+  const pendingReveal = useRef<string | undefined>(undefined);
   const [files, setFiles] = useState<OpenFile[]>([]);
   const [activePath, setActivePath] = useState("");
   const [selectedChange, setSelectedChange] = useState<WorkspaceChange>();

@@ -1,7 +1,7 @@
 FROM node:22-bookworm AS frontend
 WORKDIR /src
 COPY package*.json ./
-RUN npm ci
+RUN npm install --no-audit --no-fund
 COPY web ./web
 COPY vite.config.ts tsconfig.json ./
 RUN npm run build
