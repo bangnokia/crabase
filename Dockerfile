@@ -8,7 +8,7 @@ RUN npm run build
 
 FROM php:8.3-cli-bookworm
 RUN apt-get update && apt-get install -y --no-install-recommends git unzip libsqlite3-dev \
-    && docker-php-ext-install pdo_sqlite \
+    && docker-php-ext-install pdo_sqlite pcntl \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 WORKDIR /app
