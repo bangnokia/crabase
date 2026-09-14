@@ -11,12 +11,12 @@ services:
       CRABASE_WORKSPACE_ROOT: /workspace
       CRABASE_ALLOW_ALL_ORIGINS: "1"
       CODEX_BIN: /usr/local/bin/codex
-      NODE_BIN: /usr/local/bin/node
+      NODE_BIN: /opt/node/bin/node
     volumes:
       - crabase_runtime:/app/server/runtime
       - ${CRABASE_HOST_WORKSPACE:-.}:/workspace:rw
       - /home/crab/.local/bin/codex:/usr/local/bin/codex:ro
-      - /home/crab/.nvm/versions/node/v24.21.0/bin/node:/usr/local/bin/node:ro
+      - /home/crab/.nvm/versions/node/v24.21.0:/opt/node:ro
       - /home/crab/.codex:/root/.codex:rw
     healthcheck:
       test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1:8787/') === false ? 1 : 0);"]
