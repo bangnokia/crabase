@@ -28,7 +28,7 @@ final class Auth
     public static function allowedOrigin(?string $origin): bool
     {
         if (!is_string($origin) || !preg_match('~^https?://([^/:]+)(?::(5173|8787))?$~D', $origin, $match)) return false;
-        if ($match[1] === 'cb.dev.tda') return true;
+        if (in_array($match[1], ['cb.dev.tda', 'c.tdagroup.co'], true)) return true;
         return self::allowedHost($match[1]);
     }
     public static function allowedHost(string $host): bool
