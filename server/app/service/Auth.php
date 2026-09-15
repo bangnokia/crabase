@@ -16,7 +16,7 @@ final class Auth
         $user = AuthSession::query()->from('auth_sessions as s')->join('accounts as a', 'a.user_id', '=', 's.user_id')->join('users as u', 'u.id', '=', 'a.user_id')
             ->where('s.token_hash', hash('sha256', $token))->where('s.expires', '>', time())->where('a.enabled', 1)->selectRaw(self::FIELDS)->first()?->toArray();
         if ($user) {
-            $user['avatar_required'] = false;
+            $user['avatar_required'] = $user['avatar_url'] === '';
             $user['avatar_fallback'] = self::avatar($user['email']);
         }
         return $user;

@@ -24,7 +24,7 @@ try {
     denied(fn () => A::login(['email'=>'admin@example.com','password'=>'wrong'], 'test'));
     $token = A::login(['email'=>'ADMIN@example.com','password'=>'test-password'], 'test');
     $admin = A::user($token);
-    authCheck($admin['avatar_required'] === false);
+    authCheck($admin['avatar_required'] === true);
     authCheck($admin['id'] === $id && !isset($admin['password_hash']));
     authCheck(A::user('bad') === null && A::user(str_repeat('0',64)) === null);
     authCheck(str_starts_with(S::snapshot()['users'][0]['avatar_url'], 'https://www.gravatar.com/avatar/'));
