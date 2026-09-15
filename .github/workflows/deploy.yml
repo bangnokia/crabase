@@ -28,7 +28,6 @@ jobs:
           set -eu
           cd /home/crab/crabase
           git pull --ff-only
-          corepack enable
           pnpm install --frozen-lockfile
           pnpm run build
           php server/vendor/bin/phinx migrate -c server/phinx.php
