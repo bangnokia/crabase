@@ -54,7 +54,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     finally { setBusy(false); }
   }}>
     <h1>Sign in to Crabase</h1>
-    {oauth && <a className="button primary" href="http://127.0.0.1:8787/auth/oauth/start">Sign in with TDA</a>}
+    {oauth && <a className="button primary" href="/auth/oauth/start">Sign in with TDA</a>}
     {oauth && <button type="button" className="text-button" aria-expanded={passwordLogin} aria-controls="password-login" onClick={() => { setPasswordLogin(!passwordLogin); setError(''); }}>
       {passwordLogin ? 'Hide email and password' : 'Use email and password'}
     </button>}

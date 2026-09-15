@@ -10,6 +10,12 @@ final class OAuth
     private const PROVIDER = 'https://passport.tdagroup.online';
     private const COOKIE = 'crabase_oauth';
 
+    private static function publicUrl(): string
+    {
+        require dirname(__DIR__,2).'/config/crabase.php';
+        return rtrim(getenv('APP_URL') ?: 'http://127.0.0.1:8787', '/');
+    }
+
     public static function configured(): bool
     {
         require dirname(__DIR__,2).'/config/crabase.php';
@@ -17,13 +23,13 @@ final class OAuth
     }
     private static function redirectUri(): string
     {
-        return 'http://127.0.0.1:8787/auth/oauth/callback';
+        return self::publicUrl().'/auth/oauth/callback';
     }
     public static function start(\support\Request $request): \support\Response
     {
         if (!self::configured()) return response('OAuth login is not configured.',503);
         // Always start on the callback host so the browser-bound cookie is available there.
-        if ($request->host() !== '127.0.0.1:8787') return redirect('http://127.0.0.1:8787/auth/oauth/start');
+        if ($request->host() !== parse_url(self::publicUrl(), PHP_URL_HOST).(parse_url(self::publicUrl(), PHP_URL_PORT) ? ':'.parse_url(self::publicUrl(), PHP_URL_PORT) : '')) return redirect(self::publicUrl().'/auth/oauth/start');
         $state = bin2hex(random_bytes(32));
         $browser = bin2hex(random_bytes(32));
         $verifier = bin2hex(random_bytes(32));
@@ -108,7 +114,9 @@ final class OAuth
     {
         $headers = ['Cache-Control'=>'no-store','Referrer-Policy'=>'no-referrer','X-Content-Type-Options'=>'nosniff'];
         try {
-            if (!self::configured() || $request->host() !== '127.0.0.1:8787') throw new InvalidArgumentException('Invalid callback configuration.');
+            $public = parse_url(self::publicUrl());
+            $host = $public['host'].(!empty($public['port']) ? ':'.$public['port'] : '');
+            if (!self::configured() || $request->host() !== $host) throw new InvalidArgumentException('Invalid callback configuration.');
             $state = $request->get('state');
             if (!is_string($state)) throw new InvalidArgumentException('Missing OAuth state.');
             $verifier = self::consume($state,$request->cookie(self::COOKIE) ?? '');
