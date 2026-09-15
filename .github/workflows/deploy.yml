@@ -33,6 +33,5 @@ jobs:
           /home/crab/.local/share/pnpm/bin/pnpm install --frozen-lockfile
           /home/crab/.local/share/pnpm/bin/pnpm run build
           php server/vendor/bin/phinx migrate -c server/phinx.php
-          php server/start.php stop || true
-          php server/start.php start -d
+          php server/start.php reload -g || php server/start.php start -d
           REMOTE
