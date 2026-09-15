@@ -28,8 +28,9 @@ jobs:
           set -eu
           cd /home/crab/crabase
           git pull --ff-only
-          pnpm install --frozen-lockfile
-          pnpm run build
+          export PATH="/home/crab/.nvm/versions/node/v24.21.0/bin:$PATH"
+          /home/crab/.local/share/pnpm/bin/pnpm install --frozen-lockfile
+          /home/crab/.local/share/pnpm/bin/pnpm run build
           php server/vendor/bin/phinx migrate -c server/phinx.php
           sudo systemctl restart crabase
           sudo systemctl --no-pager --full status crabase
