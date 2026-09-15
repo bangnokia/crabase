@@ -29,6 +29,7 @@ jobs:
           cd /home/crab/crabase
           git pull --ff-only
           export PATH="/home/crab/.nvm/versions/node/v24.21.0/bin:$PATH"
+          /usr/local/bin/composer install --working-dir=server --no-dev --optimize-autoloader
           /home/crab/.local/share/pnpm/bin/pnpm install --frozen-lockfile
           /home/crab/.local/share/pnpm/bin/pnpm run build
           php server/vendor/bin/phinx migrate -c server/phinx.php
