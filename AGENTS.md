@@ -4,7 +4,7 @@ Crabase is a local shared workspace: React/Vite frontend, PHP Webman/Workerman b
 
 ## Commands
 
-- `npm run build` — typecheck and production frontend build.
+- `pnpm run build` — typecheck and production frontend build.
 - `npm test` — model/effort and WebSocket integration tests.
 - `php server/start.php start` — run HTTP on `127.0.0.1:8787` and WebSocket on `127.0.0.1:8788`.
 - `php server/start.php stop` — stop the server.
@@ -24,4 +24,4 @@ Crabase is a local shared workspace: React/Vite frontend, PHP Webman/Workerman b
 - Projects are optional existing readable folders. Standalone chats must remain project-less.
 - Worktrees reuse project records with `parent_id` pointing to the original project; chats reference the record for their actual working folder. New managed paths live at `<workspace-root>/.worktrees/<safe-project-name>/<random-word-pair>`; legacy ID-based paths remain supported. Reserve random folder names atomically and never rename active worktrees automatically. Use `Project::workspacePath()` for editor/terminal access. Worktree deletion uses validated `git worktree remove`, rejects active jobs/terminals and locked worktrees, and retains branches. Dirty worktrees return `requires_confirmation`; only an explicit second confirmation sends boolean `force: true` to discard local changes. Warn that ignored local files are removed. Never delete the original project folder; require deleting child worktrees before removing its record.
 - Do not expose loopback listeners publicly. Email/password sessions are required on HTTP data and WebSocket boundaries; derive message identity from the session, never client user_id. Projects default private; admins manage visibility and membership, public means all signed-in users, and worktrees inherit the original project's access. Use ProjectAccess for request, snapshot, push and artifact authorization. Standalone chats remain shared. OS isolation is not implemented: terminals and agents share the server account, so signed-in members remain trusted collaborators. Never expose password/session hashes in snapshots. Preserve the last enabled admin.
-- Run `npm run build` and `npm test` after changes. Keep the implementation minimal.
+- Run `pnpm run build` and `npm test` after changes. Keep the implementation minimal.

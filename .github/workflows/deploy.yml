@@ -28,8 +28,9 @@ jobs:
           set -eu
           cd /home/crab/crabase
           git pull --ff-only
-          npm ci
-          npm run build
+          corepack enable
+          pnpm install --frozen-lockfile
+          pnpm run build
           php server/vendor/bin/phinx migrate -c server/phinx.php
           sudo systemctl restart crabase
           sudo systemctl --no-pager --full status crabase
