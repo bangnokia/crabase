@@ -141,6 +141,7 @@ final class OAuth
                 ->cookie(self::COOKIE,'',-1,'/auth/oauth','',false,true,'Lax');
         } catch (\Throwable $error) {
             // Do not log provider codes, tokens, request bodies or client secrets.
+            error_log('Crabase OAuth callback failed: '.get_class($error).' '.$error->getMessage());
             return response('Unable to complete sign-in. <a href="/">Try again</a>',503,$headers)
                 ->cookie(self::COOKIE,'',-1,'/auth/oauth','',false,true,'Lax');
         }
