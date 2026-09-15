@@ -113,16 +113,19 @@ final class OAuth
     public static function callback(\support\Request $request): \support\Response
     {
         $headers = ['Cache-Control'=>'no-store','Referrer-Policy'=>'no-referrer','X-Content-Type-Options'=>'nosniff'];
+        $stage = 'validate';
         try {
             $public = parse_url(self::publicUrl());
             $host = $public['host'].(!empty($public['port']) ? ':'.$public['port'] : '');
             if (!self::configured() || $request->host() !== $host) throw new InvalidArgumentException('Invalid callback configuration.');
             $state = $request->get('state');
             if (!is_string($state)) throw new InvalidArgumentException('Missing OAuth state.');
+            $stage = 'consume_state';
             $verifier = self::consume($state,$request->cookie(self::COOKIE) ?? '');
             if ($request->get('error')) throw new InvalidArgumentException('OAuth sign-in was cancelled or denied.');
             $code = $request->get('code');
             if (!is_string($code) || $code === '' || strlen($code)>4096) throw new InvalidArgumentException('Missing authorization code.');
+            $stage = 'exchange_code';
             $result = self::fetch(self::PROVIDER.'/oauth/token',[
                 'grant_type'=>'authorization_code','client_id'=>getenv('TDA_PASSPORT_OAUTH_CLIENT_ID'),
                 'client_secret'=>getenv('TDA_PASSPORT_OAUTH_CLIENT_SECRET'),'redirect_uri'=>self::redirectUri(),
@@ -130,7 +133,11 @@ final class OAuth
             ]);
             $accessToken = $result['access_token'] ?? null;
             if (!is_string($accessToken) || $accessToken === '' || strlen($accessToken)>16000 || preg_match('/[\x00-\x20\x7f]/',$accessToken)) throw new InvalidArgumentException('Invalid OAuth token response.');
-            $id = self::account(self::fetch(self::PROVIDER.'/api/user',null,$accessToken));
+            $stage = 'fetch_profile';
+            $profile = self::fetch(self::PROVIDER.'/api/user',null,$accessToken);
+            $stage = 'link_account';
+            $id = self::account($profile);
+            $stage = 'create_session';
             $session = Auth::session($id);
             Auth::logout($request->cookie(Auth::COOKIE));
             return redirect('/')->withHeaders($headers)
@@ -141,7 +148,7 @@ final class OAuth
                 ->cookie(self::COOKIE,'',-1,'/auth/oauth','',false,true,'Lax');
         } catch (\Throwable $error) {
             // Do not log provider codes, tokens, request bodies or client secrets.
-            error_log('Crabase OAuth callback failed: '.get_class($error).' '.$error->getMessage());
+            error_log(json_encode(['event'=>'oauth_callback_failed','stage'=>$stage,'exception'=>get_class($error),'message'=>$error->getMessage(),'file'=>$error->getFile(),'line'=>$error->getLine()], JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE));
             return response('Unable to complete sign-in. <a href="/">Try again</a>',503,$headers)
                 ->cookie(self::COOKIE,'',-1,'/auth/oauth','',false,true,'Lax');
         }
