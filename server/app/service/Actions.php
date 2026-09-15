@@ -55,6 +55,7 @@ final class Actions
             'worktreeCreate' => Worktrees::create($data),
             'projectArchive', 'projectDelete' => self::manageProject($action, $data),
             'create' => self::createChat($data),
+            'rename' => self::renameChat($data),
             'message' => self::sendMessage($data),
             'archive' => self::archiveChat($data),
             'cancel' => self::cancelJobs($data),
@@ -139,11 +140,18 @@ final class Actions
         $now = gmdate('c');
         Chat::query()->create([
             'id' => $id, 'project_id' => $project,
-            'title' => Store::text($data['title'] ?? 'New chat', 160),
+            'title' => Store::text($data['title'] ?? 'New chat', 512),
             'created_at' => $now, 'updated_at' => $now,
         ]);
         Store::event($id, 'Started a new thread');
         return ['id' => $id];
+    }
+
+    public static function renameChat(array $data): array
+    {
+        $chat = Chat::query()->find(Store::text($data['chat_id'] ?? null, 64)) ?? throw new InvalidArgumentException('Conversation not found.');
+        $chat->update(['title' => Store::text($data['title'] ?? null, 512)]);
+        return ['ok' => true];
     }
 
 

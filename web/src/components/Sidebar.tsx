@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
-  Archive,
   Folder,
   FolderOpen,
   GitBranch,
@@ -36,6 +35,7 @@ type Props = {
   newChat: (project?: string) => void;
   showDialog: (dialog: "search" | "project" | "settings") => void;
   archive: (chat: Chat) => void;
+  rename: (chat: Chat) => void;
   manageProject: (project: Project, action: "projectArchive" | "projectDelete") => void;
   createWorktree: (project: Project) => void;
 };
@@ -45,12 +45,14 @@ function ChatLink({
   avatars,
   open,
   archive,
+  rename,
 }: {
   chat: Chat;
   selected: string;
   avatars: Avatars;
   open: (id: string) => void;
   archive: (chat: Chat) => void;
+  rename: (chat: Chat) => void;
 }) {
   return (
     <div
@@ -97,13 +99,15 @@ function ChatLink({
             aria-label={chat.status}
           />
         )}
-        <IconButton
-          className="chat-archive"
-          label={`Archive ${chat.title}`}
-          onClick={() => archive(chat)}
+        <Menu
+          viewport
+          className="chat-menu"
+          label={`Options for ${chat.title}`}
+          icon={<MoreHorizontal size={15} />}
         >
-          <Archive size={15} />
-        </IconButton>
+          <MenuItem onClick={() => rename(chat)}>Rename</MenuItem>
+          <MenuItem onClick={() => archive(chat)}>Archive</MenuItem>
+        </Menu>
       </div>
     </div>
   );
@@ -125,6 +129,7 @@ export function Sidebar({
   newChat,
   showDialog,
   archive,
+  rename,
   manageProject,
   createWorktree,
 }: Props) {
@@ -200,6 +205,7 @@ export function Sidebar({
                 <ChatLink
                   key={chat.id}
                   {...{ chat, selected, avatars, open, archive }}
+                  rename={rename}
                 />
               ))}
             {projectChats.length > 5 &&
@@ -306,7 +312,7 @@ export function Sidebar({
             .map((chat) => (
               <ChatLink
                 key={chat.id}
-                {...{ chat, selected, avatars, open, archive }}
+                {...{ chat, selected, avatars, open, archive, rename }}
               />
             ))}
         </div>

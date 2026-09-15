@@ -29,6 +29,13 @@ try {
         catch (InvalidArgumentException) {}
     }
     check(count(S::all('SELECT * FROM messages WHERE chat_id=?',[$chat])) === 2);
+    $longTitle = str_repeat('x', 512);
+    A::handle('rename', ['chat_id'=>$chat, 'title'=>$longTitle]);
+    check(\app\model\Chat::find($chat)->title === $longTitle);
+    foreach ([' ', str_repeat('x', 513)] as $invalidTitle) {
+        try { A::handle('rename', ['chat_id'=>$chat, 'title'=>$invalidTitle]); throw new RuntimeException('Invalid chat title accepted'); }
+        catch (InvalidArgumentException) {}
+    }
     $participantsChat = A::handle('create', ['title'=>'Participant check'])['id'];
     A::handle('message', ['chat_id'=>$participantsChat,'body'=>'note','mode'=>'note','user_id'=>$users['user1']]);
     A::handle('message', ['chat_id'=>$participantsChat,'body'=>'another note','mode'=>'note','user_id'=>$users['user1']]);
