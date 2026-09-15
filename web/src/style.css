@@ -466,7 +466,7 @@ small {
   gap: var(--space-1);
   transform: translateY(-50%);
 }
-.chat-archive {
+.chat-menu > .icon-button {
   width: 0;
   height: 28px;
   padding: 0;
@@ -485,16 +485,17 @@ small {
 .chat-row.has-progress:has(:focus-visible) .chat-link {
   padding-right: 64px;
 }
-.chat-row:hover .chat-archive,
-.chat-row:has(:focus-visible) .chat-archive {
+.chat-row:hover .chat-menu > .icon-button,
+.chat-row:has(:focus-visible) .chat-menu > .icon-button,
+.chat-menu > .icon-button[aria-expanded="true"] {
   width: 28px;
   opacity: 1;
   pointer-events: auto;
 }
 .chat-trailing,
 .chat-progress,
-.chat-row .chat-archive,
-.chat-row .chat-archive:hover {
+.chat-menu > .icon-button,
+.chat-menu > .icon-button:hover {
   background: transparent;
 }
 .load-more {

@@ -167,6 +167,10 @@ if __name__=='__main__':
     try:
         assert first.call('sync',{'chat_id':chat})['thread']['chat']['project_id'] is None
         second.call('sync',{'chat_id':chat});first.events.clear();second.events.clear()
+        first.call('rename',{'chat_id':chat,'title':'Renamed WebSocket check'})
+        pushed=second.patch('state')['state']
+        assert next(c for c in pushed['chats'] if c['id']==chat)['title']=='Renamed WebSocket check'
+        first.call('rename',{'chat_id':chat,'title':' '},error=True)
         first.call('message',{'chat_id':chat,'body':' ','mode':'note'},error=True)
         first.call('message',{'chat_id':chat,'body':'check','mode':'invalid'},error=True)
         body='Live note '+uuid.uuid4().hex

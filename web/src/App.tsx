@@ -290,6 +290,11 @@ export function App() {
     if (await act("archive", { chat_id: target.id, archived: !target.archived }))
       setToast(target.archived ? "Chat restored" : "Chat archived");
   }
+  async function rename(target: NonNullable<typeof chat>) {
+    const title = window.prompt("Rename chat", target.title);
+    if (title === null || title.trim() === target.title) return;
+    if (await act("rename", { chat_id: target.id, title })) setToast("Chat renamed");
+  }
   async function manageProject(target: Project, action: "projectArchive" | "projectDelete") {
     if (action === "projectDelete" && !window.confirm(
       target.parent_id
@@ -396,6 +401,7 @@ export function App() {
           else setDialog(value);
         }}
         archive={(target) => void archive(target)}
+        rename={(target) => void rename(target)}
         manageProject={(target, action) => void manageProject(target, action)}
         createWorktree={setWorktreeProject}
       />
