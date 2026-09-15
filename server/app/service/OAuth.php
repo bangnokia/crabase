@@ -13,7 +13,7 @@ final class OAuth
     public static function configured(): bool
     {
         require dirname(__DIR__,2).'/config/crabase.php';
-        return (bool)(getenv('CRABASE_OAUTH_CLIENT_ID') && getenv('CRABASE_OAUTH_CLIENT_SECRET'));
+        return (bool)(getenv('TDA_PASSPORT_OAUTH_CLIENT_ID') && getenv('TDA_PASSPORT_OAUTH_CLIENT_SECRET'));
     }
     private static function redirectUri(): string
     {
@@ -31,7 +31,7 @@ final class OAuth
         Db::table('oauth_flows')->where('expires', '<', time())->delete();
         Db::table('oauth_flows')->insert(['state_hash'=>hash('sha256',$state), 'browser_hash'=>hash('sha256',$browser), 'verifier'=>$verifier, 'expires'=>time()+600]);
         $url = self::PROVIDER.'/oauth/authorize?'.http_build_query([
-            'client_id'=>getenv('CRABASE_OAUTH_CLIENT_ID'), 'redirect_uri'=>self::redirectUri(),
+            'client_id'=>getenv('TDA_PASSPORT_OAUTH_CLIENT_ID'), 'redirect_uri'=>self::redirectUri(),
             'response_type'=>'code', 'state'=>$state,
             'code_challenge'=>rtrim(strtr(base64_encode(hash('sha256',$verifier,true)),'+/','-_'),'='),
             'code_challenge_method'=>'S256',
@@ -116,8 +116,8 @@ final class OAuth
             $code = $request->get('code');
             if (!is_string($code) || $code === '' || strlen($code)>4096) throw new InvalidArgumentException('Missing authorization code.');
             $result = self::fetch(self::PROVIDER.'/oauth/token',[
-                'grant_type'=>'authorization_code','client_id'=>getenv('CRABASE_OAUTH_CLIENT_ID'),
-                'client_secret'=>getenv('CRABASE_OAUTH_CLIENT_SECRET'),'redirect_uri'=>self::redirectUri(),
+                'grant_type'=>'authorization_code','client_id'=>getenv('TDA_PASSPORT_OAUTH_CLIENT_ID'),
+                'client_secret'=>getenv('TDA_PASSPORT_OAUTH_CLIENT_SECRET'),'redirect_uri'=>self::redirectUri(),
                 'code'=>$code,'code_verifier'=>$verifier,
             ]);
             $accessToken = $result['access_token'] ?? null;
