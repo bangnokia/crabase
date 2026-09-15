@@ -408,6 +408,7 @@ export function App() {
       <main className="main-panel" id="main-content" tabIndex={-1}>
         <Header
           {...{ chat, project, sidebarHidden }}
+          avatars={preferences.avatars}
           showSidebar={() => {
             setSidebar(true);
             setSidebarHidden(false);

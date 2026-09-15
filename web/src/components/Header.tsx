@@ -1,6 +1,7 @@
 import { Copy, FileCode2, PanelLeft, PanelRight, SquareTerminal } from "lucide-react";
-import type { Chat, Project } from "../types";
+import type { Avatars, Chat, Project } from "../types";
 import { IconButton } from "./ui";
+import { AvatarStack } from "./Avatar";
 export function Header({
   chat,
   project,
@@ -13,6 +14,7 @@ export function Header({
   toggleTerminal,
   terminalOpen,
   copy,
+  avatars,
 }: {
   chat?: Chat;
   project?: Project;
@@ -25,6 +27,7 @@ export function Header({
   toggleTerminal: () => void;
   terminalOpen: boolean;
   copy: () => void;
+  avatars: Avatars;
 }) {
   return (
     <header className="topbar">
@@ -45,6 +48,7 @@ export function Header({
         <span className="truncate" title={chat?.title}>
           {chat?.title || "New chat"}
         </span>
+        {chat && <AvatarStack users={chat.participants} avatars={avatars} />}
       </div>
       <div className="topbar-actions">
         {chat && (
