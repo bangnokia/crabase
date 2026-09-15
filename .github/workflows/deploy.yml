@@ -1,0 +1,36 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        env:
+          SSH_KEY: ${{ secrets.CRABASE_SSH_KEY }}
+        run: |
+          set -eu
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$SSH_KEY" > "$HOME/.ssh/crabase"
+          chmod 600 "$HOME/.ssh/crabase"
+
+          ssh -i "$HOME/.ssh/crabase" \
+            -o StrictHostKeyChecking=accept-new \
+            crab@217.15.167.49 <<'REMOTE'
+          set -eu
+          cd /home/crab/crabase
+          git pull --ff-only
+          npm ci
+          npm run build
+          php server/vendor/bin/phinx migrate -c server/phinx.php
+          sudo systemctl restart crabase
+          sudo systemctl --no-pager --full status crabase
+          REMOTE
