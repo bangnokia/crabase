@@ -70,7 +70,6 @@ final class OAuth
         if ($form !== null) curl_setopt_array($curl,[CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>http_build_query($form)]);
         $ok = curl_exec($curl);
         $status = curl_getinfo($curl,CURLINFO_RESPONSE_CODE);
-        curl_close($curl);
         if ($ok === false || $status < 200 || $status >= 300) throw new InvalidArgumentException('OAuth provider request failed. Please try again.');
         $result = json_decode($body,true);
         if (!is_array($result)) throw new InvalidArgumentException('Invalid response from OAuth provider.');
